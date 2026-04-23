@@ -4,3 +4,4 @@ coverage
 .vite
 .DS_Store
 *.tsbuildinfo
+AGENTS.md

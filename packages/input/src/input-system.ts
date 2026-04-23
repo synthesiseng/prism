@@ -1,16 +1,32 @@
 import { Vec2 } from "@prism/math";
 
+/**
+ * DOM event target used by `InputSystem`.
+ */
 export type InputTarget = Pick<
   HTMLElement,
   "addEventListener" | "removeEventListener" | "getBoundingClientRect"
 >;
 
+/**
+ * Tracks keyboard and pointer state for a browser target.
+ *
+ * @remarks
+ * Pointer coordinates are measured in CSS pixels relative to the attached
+ * target. Use `CanvasRuntime.clientToCanvasPoint()` when you need coordinates
+ * relative to a Prism runtime canvas.
+ */
 export class InputSystem {
   private readonly keys = new Set<string>();
   private pointerPosition = Vec2.zero;
   private pointerDown = false;
   private target: InputTarget | null = null;
 
+  /**
+   * Attaches the input system to a target.
+   *
+   * @param target - Element-like target that receives pointer events.
+   */
   attach(target: InputTarget): void {
     if (this.target) {
       this.detach();
@@ -24,6 +40,9 @@ export class InputSystem {
     globalThis.addEventListener("keyup", this.onKeyUp);
   }
 
+  /**
+   * Detaches event listeners and clears transient input state.
+   */
   detach(): void {
     if (!this.target) {
       return;
@@ -39,10 +58,19 @@ export class InputSystem {
     this.pointerDown = false;
   }
 
+  /**
+   * Checks whether a keyboard code is currently pressed.
+   *
+   * @param code - DOM `KeyboardEvent.code` value.
+   * @returns `true` when the key is currently down.
+   */
   isKeyDown(code: string): boolean {
     return this.keys.has(code);
   }
 
+  /**
+   * Current pointer state in target-local CSS pixels.
+   */
   get pointer(): Readonly<{ position: Vec2; down: boolean }> {
     return {
       position: this.pointerPosition,

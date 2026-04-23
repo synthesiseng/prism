@@ -15,13 +15,43 @@ import {
 } from "./hidpi";
 import { CanvasSurface, setSurfaceLifecycle, type SurfaceOptions } from "./surface";
 
+/**
+ * Handles runtime state updates before a paint pass.
+ *
+ * @param time - Timing data for the current animation frame.
+ */
 export type UpdateHandler = (time: FrameTime) => void;
 
+/**
+ * A point in the runtime's coordinate space.
+ *
+ * @remarks
+ * Public runtime coordinates use CSS pixels. Use the CSS-to-canvas helpers when
+ * you need backing-store pixels for direct canvas drawing.
+ */
 export type CanvasPoint = Readonly<{
+  /**
+   * X coordinate.
+   */
   x: number;
+
+  /**
+   * Y coordinate.
+   */
   y: number;
 }>;
 
+/**
+ * Handles a paint pass for the runtime.
+ *
+ * @remarks
+ * Paint handlers receive the native 2D canvas context and must call
+ * `drawSurface()` for each registered HTML surface that should be active in the
+ * current frame. Registered surfaces that are not drawn are deactivated for
+ * pointer and focus handling.
+ *
+ * @param api - Paint context and surface drawing controls.
+ */
 export type PaintHandler = (api: {
   ctx: HtmlCanvasContext2D;
   time: FrameTime;
@@ -29,10 +59,27 @@ export type PaintHandler = (api: {
   invalidate: () => void;
 }) => void;
 
+/**
+ * Identifies the backend selected by the runtime.
+ */
 export type CanvasBackendKind = RuntimeBackend["kind"];
+
+/**
+ * Selects how the runtime chooses its backend.
+ *
+ * @remarks
+ * `"auto"` prefers native HTML-in-Canvas and falls back to the compatibility
+ * backend when native browser support is unavailable.
+ */
 export type CanvasBackendPreference = "auto" | CanvasBackendKind;
 
+/**
+ * Configures a Prism canvas runtime.
+ */
 export type CanvasRuntimeOptions = Readonly<{
+  /**
+   * Chooses the rendering backend.
+   */
   backend?: CanvasBackendPreference;
 }>;
 
@@ -50,8 +97,42 @@ type SurfaceRecord = {
   readonly domState: SurfaceDomState;
 };
 
+/**
+ * Owns a 2D HTML-in-Canvas runtime for one canvas.
+ *
+ * @remarks
+ * `CanvasRuntime` is the public owner of surface registration, paint
+ * scheduling, native/fallback backend selection, HiDPI sizing, DOM transform
+ * sync, invalidation, and coordinate conversion. Surface bounds and client
+ * input coordinates are CSS pixels; the runtime converts to backing-store
+ * pixels when drawing.
+ *
+ * Native HTML-in-Canvas is preferred when available. The fallback backend is a
+ * lower-fidelity compatibility path and should not shape application code.
+ *
+ * @example
+ * ```ts
+ * const runtime = new CanvasRuntime(canvas, { backend: "auto" });
+ * const surface = runtime.registerSurface(panel, {
+ *   bounds: { x: 0, y: 0, width: 320, height: 180 }
+ * });
+ *
+ * runtime.onPaint(({ drawSurface }) => {
+ *   drawSurface(surface);
+ * });
+ *
+ * runtime.start();
+ * ```
+ */
 export class CanvasRuntime {
+  /**
+   * The canvas controlled by this runtime.
+   */
   readonly canvas: HTMLCanvasElement;
+
+  /**
+   * The 2D context used for runtime painting.
+   */
   readonly ctx: HtmlCanvasContext2D;
 
   private readonly backend: RuntimeBackend;
@@ -72,6 +153,15 @@ export class CanvasRuntime {
   private pendingPaint = true;
   private destroyed = false;
 
+  /**
+   * Creates a runtime for a canvas element.
+   *
+   * @param canvas - Canvas element controlled by the runtime.
+   * @param options - Runtime configuration.
+   *
+   * @throws Error when the canvas cannot create a 2D rendering context.
+   * @throws Error when `backend` is `"native"` and native HTML-in-Canvas is unavailable.
+   */
   constructor(canvas: HTMLCanvasElement, options: CanvasRuntimeOptions = {}) {
     this.canvas = canvas;
     const ctx = canvas.getContext("2d");
@@ -127,22 +217,48 @@ export class CanvasRuntime {
     }
   }
 
+  /**
+   * Canvas width in CSS pixels.
+   */
   get width(): number {
     return this.metrics.cssWidth;
   }
 
+  /**
+   * Canvas height in CSS pixels.
+   */
   get height(): number {
     return this.metrics.cssHeight;
   }
 
+  /**
+   * Current CSS-pixel to backing-store pixel ratio.
+   */
   get pixelRatio(): number {
     return this.metrics.pixelRatio;
   }
 
+  /**
+   * Backend currently selected by the runtime.
+   */
   get backendKind(): CanvasBackendKind {
     return this.backend.kind;
   }
 
+  /**
+   * Registers an HTML element as a runtime-managed canvas surface.
+   *
+   * @remarks
+   * Prism stores the element's original DOM owner and selected attributes, then
+   * moves the element under the runtime canvas so native HTML-in-Canvas can draw
+   * it. Dispose or unregister the returned surface to restore ownership.
+   *
+   * @param element - HTML element represented by the surface.
+   * @param options - Surface bounds and accessibility options.
+   * @returns The registered runtime surface.
+   *
+   * @throws Error when called after the runtime is destroyed.
+   */
   registerSurface(element: HTMLElement, options: SurfaceOptions): CanvasSurface {
     if (this.destroyed) {
       throw new Error("Cannot register a surface on a destroyed Prism CanvasRuntime.");
@@ -174,6 +290,11 @@ export class CanvasRuntime {
     return surface;
   }
 
+  /**
+   * Unregisters a surface and restores its original DOM ownership.
+   *
+   * @param surface - Surface returned by `registerSurface()`.
+   */
   unregisterSurface(surface: CanvasSurface): void {
     surface.dispose();
   }
@@ -194,6 +315,13 @@ export class CanvasRuntime {
     this.invalidate();
   }
 
+  /**
+   * Converts viewport client coordinates into runtime CSS-pixel coordinates.
+   *
+   * @param clientX - Pointer or mouse X coordinate from a DOM event.
+   * @param clientY - Pointer or mouse Y coordinate from a DOM event.
+   * @returns A point relative to the runtime canvas in CSS pixels.
+   */
   clientToCanvasPoint(clientX: number, clientY: number): CanvasPoint {
     const rect = this.canvas.getBoundingClientRect();
     return {
@@ -202,10 +330,22 @@ export class CanvasRuntime {
     };
   }
 
+  /**
+   * Converts a CSS-pixel length to backing-store pixels.
+   *
+   * @param length - Length in CSS pixels.
+   * @returns The equivalent backing-store pixel length.
+   */
   cssLengthToCanvasPixels(length: number): number {
     return length * this.metrics.pixelRatio;
   }
 
+  /**
+   * Converts a CSS-pixel point to backing-store pixels.
+   *
+   * @param point - Point in runtime CSS-pixel coordinates.
+   * @returns The equivalent point in backing-store pixels.
+   */
   cssPointToCanvasPixels(point: CanvasPoint): CanvasPoint {
     const scaleX = this.width > 0 ? this.canvas.width / this.width : this.metrics.pixelRatio;
     const scaleY = this.height > 0 ? this.canvas.height / this.height : this.metrics.pixelRatio;
@@ -215,17 +355,36 @@ export class CanvasRuntime {
     };
   }
 
+  /**
+   * Registers an update handler.
+   *
+   * @param handler - Function called once per animation frame before painting.
+   * @returns This runtime for chaining.
+   */
   onUpdate(handler: UpdateHandler): this {
     this.updateHandlers.push(handler);
     return this;
   }
 
+  /**
+   * Registers a paint handler.
+   *
+   * @param handler - Function called when the runtime paints.
+   * @returns This runtime for chaining.
+   */
   onPaint(handler: PaintHandler): this {
     this.paintHandlers.push(handler);
     this.invalidate();
     return this;
   }
 
+  /**
+   * Schedules a paint pass.
+   *
+   * @remarks
+   * Native runtimes forward invalidation to `requestPaint()`. Fallback runtimes
+   * paint on the next runtime frame.
+   */
   invalidate(): void {
     if (this.destroyed) {
       return;
@@ -237,14 +396,27 @@ export class CanvasRuntime {
     }
   }
 
+  /**
+   * Starts the runtime frame loop.
+   */
   start(): void {
     this.loop.start();
   }
 
+  /**
+   * Stops the runtime frame loop.
+   */
   stop(): void {
     this.loop.stop();
   }
 
+  /**
+   * Stops the runtime and releases runtime-owned DOM state.
+   *
+   * @remarks
+   * Destroying a runtime unregisters all surfaces, disconnects HiDPI observers,
+   * and clears native paint hooks. Calling `destroy()` more than once is safe.
+   */
   destroy(): void {
     if (this.destroyed) {
       return;
