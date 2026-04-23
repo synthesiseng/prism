@@ -24,8 +24,7 @@
       "@prism/math": ["./packages/math/src/index.ts"],
       "@prism/renderer": ["./packages/renderer/src/index.ts"],
       "@prism/scene": ["./packages/scene/src/index.ts"],
-      "@prism/shader-fx": ["./packages/shader-fx/src/index.ts"],
-      "@prism/ui-dom": ["./packages/ui-dom/src/index.ts"]
+      "@prism/shader-fx": ["./packages/shader-fx/src/index.ts"]
     }
   }
 }

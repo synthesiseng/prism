@@ -5,10 +5,7 @@
   "type": "module",
   "packageManager": "pnpm@9.15.4",
   "scripts": {
-    "dev": "pnpm --filter @prism/demo-duck-hunt-todo dev",
-    "dev:cockpit": "pnpm --filter @prism/demo-cockpit dev",
-    "dev:duck-hunt": "pnpm --filter @prism/demo-duck-hunt-todo dev",
-    "build": "pnpm -r --sort build",
+    "build": "tsc -b tsconfig.build.json",
     "test": "vitest run",
     "lint": "eslint .",
     "typecheck": "tsc -b tsconfig.build.json",

@@ -9,8 +9,8 @@ export class FallbackCanvasBackend implements RuntimeBackend {
   private readonly canvas: HTMLCanvasElement;
   private readonly ctx: CanvasRenderingContext2D;
 
-  constructor(canvas: HTMLCanvasElement = document.createElement("canvas")) {
-    this.canvas = canvas;
+  constructor(createCanvas: () => HTMLCanvasElement = createFallbackCanvas) {
+    this.canvas = createCanvas();
     const ctx = this.canvas.getContext("2d");
 
     if (!ctx) {
@@ -79,4 +79,8 @@ export class FallbackCanvasBackend implements RuntimeBackend {
 
     return this.canvas;
   }
+}
+
+function createFallbackCanvas(): HTMLCanvasElement {
+  return document.createElement("canvas");
 }

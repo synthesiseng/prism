@@ -8,9 +8,6 @@
     { "path": "./packages/input" },
     { "path": "./packages/scene" },
     { "path": "./packages/renderer" },
-    { "path": "./packages/ui-dom" },
-    { "path": "./packages/shader-fx" },
-    { "path": "./apps/demo-cockpit" },
-    { "path": "./apps/demo-duck-hunt-todo" }
+    { "path": "./packages/shader-fx" }
   ]
 }

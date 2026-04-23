@@ -1,15 +1,12 @@
 # Prism
 
-Prism is a small browser game engine focused on one differentiator: HTML/CSS UI is treated as a first-class scene surface while the accessible DOM remains available for interaction, focus, and assistive technology.
+Prism is a browser canvas runtime focused on one differentiator: HTML/CSS UI is treated as a first-class canvas surface while the accessible DOM remains available for interaction, focus, and assistive technology.
 
-Today, those surfaces are captured through a deterministic fallback adapter and composed into the rendered scene. Experimental browser APIs can later replace the capture backend without changing the rest of the engine.
+Prism prefers native HTML-in-Canvas browser capabilities when available, and falls back to a deterministic compatibility backend when they are not. The fallback path is intentionally lower fidelity and compatibility-only; it must not shape the main runtime API.
 
 ## Workspace
 
 ```txt
-apps/
-  demo-cockpit/       Existing WebGL-oriented demo.
-  demo-duck-hunt-todo/ HTML-in-Canvas-first Prism runtime demo.
 packages/
   assets/             Asset cache and browser asset loading.
   core/               Frame loop, engine composition, runtime contracts.
@@ -19,7 +16,7 @@ packages/
   renderer/           WebGL bootstrap and draw primitives.
   scene/              Lightweight scene/entity composition.
   shader-fx/          Effect descriptors and future shader helpers.
-  ui-dom/             Legacy package. Not part of the Prism v1 runtime path.
+  ui-dom/             Legacy private package. Quarantined from the v1 runtime path.
 ```
 
 ## Dependency Rules
@@ -34,8 +31,6 @@ html-canvas -> core, math
 scene -> core, math
 renderer -> core, math
 shader-fx -> renderer
-apps/demo-duck-hunt-todo -> html-canvas, input, math
-apps/demo-cockpit -> core, input, math, renderer
 ```
 
 Rules:
@@ -44,7 +39,7 @@ Rules:
 - `core` owns runtime lifecycle and timing, not rendering or DOM APIs.
 - `html-canvas` owns the Prism v1 runtime: canvas lifecycle, surface registration, native HTML-in-Canvas integration, invalidation, and transform sync.
 - `renderer` remains for future WebGL/WebGPU integration and older demos.
-- `ui-dom` is legacy and is not used by the v1 runtime or demos.
+- `ui-dom` is legacy, private, and not part of the root build or v1 runtime path.
 - Apps compose systems. Engine packages do not import from apps.
 - Browser APIs live at subsystem edges rather than leaking through every package.
 
@@ -60,7 +55,7 @@ Small immutable math values such as `Vec2` and `Rect`. Keep this package platfor
 
 ### `@prism/html-canvas`
 
-Owns `CanvasRuntime`, `CanvasSurface`, and the native-first backend model. The runtime registers HTML surfaces, keeps them as direct children of the target canvas for the native path, owns the `onpaint` / `requestPaint()` integration, and automatically synchronizes DOM transforms.
+Owns `CanvasRuntime`, `CanvasSurface`, and the native-first backend model. Surface bounds and input coordinates are CSS pixels; the runtime owns backing-store conversion, HiDPI sizing, backend selection, `onpaint` / `requestPaint()` integration, invalidation, lifecycle cleanup, and DOM transform sync.
 
 ### `@prism/renderer`
 
@@ -91,9 +86,33 @@ Add features where ownership is clearest:
 - New input device: `packages/input`.
 - New math primitive: `packages/math`.
 - New runtime scheduling behavior: `packages/core`.
-- New demo-only behavior: `apps/demo-cockpit`.
 
 Prefer composition through small objects over inheritance trees. For example, a game can compose `CanvasRuntime`, `InputSystem`, and local gameplay systems without each subsystem knowing about the others.
+
+## Runtime API
+
+```ts
+import { CanvasRuntime } from "@prism/html-canvas";
+
+const runtime = new CanvasRuntime(canvas, { backend: "auto" });
+
+const surface = runtime.registerSurface(element, {
+  bounds: { x: 0, y: 0, width: 800, height: 600 }
+});
+
+runtime.onUpdate((time) => {
+  void time;
+});
+
+runtime.onPaint(({ ctx, drawSurface }) => {
+  drawSurface(surface);
+  void ctx;
+});
+
+runtime.start();
+```
+
+Call `surface.dispose()` or `runtime.unregisterSurface(surface)` when a surface leaves the runtime. Undrawn surfaces are inactive for pointer/focus handling until they are drawn again.
 
 ## Avoiding Boundary Drift
 
@@ -108,7 +127,6 @@ Prefer composition through small objects over inheritance trees. For example, a 
 
 ```sh
 pnpm install
-pnpm dev
 pnpm typecheck
 pnpm test
 pnpm lint
@@ -117,4 +135,4 @@ pnpm build
 
 ## Demo
 
-`apps/demo-duck-hunt-todo` is the primary Prism v1 demo. It uses `CanvasRuntime` APIs only. Native HTML-in-Canvas is the preferred backend, and fallback exists behind the same runtime abstraction as a secondary path.
+No first-party demo is currently part of the root workspace. The v1 runtime package is the product center.

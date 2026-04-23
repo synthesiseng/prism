@@ -30,41 +30,19 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9
 
-  apps/demo-cockpit:
-    dependencies:
-      '@prism/assets':
-        specifier: workspace:*
-        version: link:../../packages/assets
-      '@prism/core':
-        specifier: workspace:*
-        version: link:../../packages/core
-      '@prism/input':
-        specifier: workspace:*
-        version: link:../../packages/input
-      '@prism/math':
-        specifier: workspace:*
-        version: link:../../packages/math
-      '@prism/renderer':
-        specifier: workspace:*
-        version: link:../../packages/renderer
-      '@prism/scene':
-        specifier: workspace:*
-        version: link:../../packages/scene
-      '@prism/shader-fx':
-        specifier: workspace:*
-        version: link:../../packages/shader-fx
-      '@prism/ui-dom':
-        specifier: workspace:*
-        version: link:../../packages/ui-dom
-    devDependencies:
-      vite:
-        specifier: ^6.0.7
-        version: 6.4.2
-
   packages/assets: {}
 
   packages/core:
     dependencies:
+      '@prism/math':
+        specifier: workspace:*
+        version: link:../math
+
+  packages/html-canvas:
+    dependencies:
+      '@prism/core':
+        specifier: workspace:*
+        version: link:../core
       '@prism/math':
         specifier: workspace:*
         version: link:../math
