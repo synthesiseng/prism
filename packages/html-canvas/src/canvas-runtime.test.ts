@@ -551,6 +551,36 @@ describe("CanvasRuntime", () => {
     runtime.destroy();
   });
 
+  it("does not let one runtime unregister a surface owned by another runtime", () => {
+    const firstCanvas = new FakeCanvas(false);
+    const secondCanvas = new FakeCanvas(false);
+    firstCanvas.ownerDocument = document;
+    secondCanvas.ownerDocument = document;
+    const parent = document.createElement("div");
+    const element = document.createElement("section");
+    parent.appendChild(element);
+    const firstRuntime = new CanvasRuntime(firstCanvas as unknown as HTMLCanvasElement);
+    const secondRuntime = new CanvasRuntime(secondCanvas as unknown as HTMLCanvasElement);
+    const surface = secondRuntime.registerSurface(element as unknown as HTMLElement, {
+      bounds: { x: 0, y: 0, width: 100, height: 50 }
+    });
+
+    expect(() => {
+      firstRuntime.unregisterSurface(surface);
+    }).toThrow("Prism CanvasRuntime can only use surfaces registered with this runtime.");
+
+    expect(surface.isDisposed).toBe(false);
+    expect(element.parentElement).toBe(secondCanvas);
+
+    secondRuntime.unregisterSurface(surface);
+
+    expect(surface.isDisposed).toBe(true);
+    expect(parent.children).toEqual([element]);
+
+    firstRuntime.destroy();
+    secondRuntime.destroy();
+  });
+
   it("centralizes client and backing-store coordinate conversion", () => {
     const canvas = new FakeCanvas(false);
     canvas.ownerDocument = document;
