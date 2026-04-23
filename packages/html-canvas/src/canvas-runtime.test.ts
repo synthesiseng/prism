@@ -268,7 +268,7 @@ describe("CanvasRuntime", () => {
     runtime.destroy();
   });
 
-  it("resolves paintOnce after a fallback paint pass", async () => {
+  it("resolves paintOnce after a fallback paint pass without starting the frame loop", async () => {
     const canvas = new FakeCanvas(false);
     canvas.ownerDocument = document;
     const element = document.createElement("section");
@@ -283,11 +283,35 @@ describe("CanvasRuntime", () => {
       drawSurface(surface);
     });
 
+    expect(paintCount).toBe(0);
+
     await runtime.paintOnce();
 
     expect(paintCount).toBe(1);
     expect(canvas.context.drawImageCount).toBe(1);
     expect(element.style.pointerEvents).toBe("auto");
+
+    runtime.destroy();
+  });
+
+  it("resolves concurrent paintOnce calls from the same fallback paint pass", async () => {
+    const canvas = new FakeCanvas(false);
+    canvas.ownerDocument = document;
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+    let paintCount = 0;
+
+    runtime.onPaint(() => {
+      paintCount += 1;
+    });
+
+    const firstPaint = runtime.paintOnce();
+    const secondPaint = runtime.paintOnce();
+
+    expect(paintCount).toBe(0);
+
+    await Promise.all([firstPaint, secondPaint]);
+
+    expect(paintCount).toBe(1);
 
     runtime.destroy();
   });
@@ -325,6 +349,34 @@ describe("CanvasRuntime", () => {
     runtime.destroy();
   });
 
+  it("resolves paintOnce called inside onPaint from the next fallback paint pass", async () => {
+    const canvas = new FakeCanvas(false);
+    canvas.ownerDocument = document;
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+    let paintCount = 0;
+    const nestedPaints: Array<Promise<void>> = [];
+    let nestedResolvedAtPaintCount = 0;
+
+    runtime.onPaint(() => {
+      paintCount += 1;
+      if (nestedPaints.length === 0) {
+        nestedPaints.push(runtime.paintOnce().then(() => {
+          nestedResolvedAtPaintCount = paintCount;
+        }));
+      }
+    });
+
+    await runtime.paintOnce();
+
+    expect(nestedPaints).toHaveLength(1);
+    await Promise.all(nestedPaints);
+
+    expect(paintCount).toBe(2);
+    expect(nestedResolvedAtPaintCount).toBe(2);
+
+    runtime.destroy();
+  });
+
   it("rejects pending paintOnce work when the runtime is destroyed", async () => {
     const canvas = new FakeCanvas(true);
     canvas.ownerDocument = document;
@@ -336,6 +388,23 @@ describe("CanvasRuntime", () => {
     await expect(paint).rejects.toThrow(
       "Cannot complete paintOnce() after Prism CanvasRuntime is destroyed."
     );
+  });
+
+  it("rejects paintOnce waiters with paint handler errors", async () => {
+    const canvas = new FakeCanvas(false);
+    canvas.ownerDocument = document;
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+    runtime.onPaint(() => {
+      throw new Error("paint failed");
+    });
+
+    await expect(runtime.paintOnce()).rejects.toThrow("paint failed");
+    expect(() => {
+      (runtime as unknown as RuntimeInternals).flushPaint();
+    }).toThrow("paint failed");
+
+    runtime.destroy();
   });
 
   it("keeps undrawn surfaces inactive", () => {

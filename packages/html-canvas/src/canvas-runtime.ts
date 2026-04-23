@@ -109,6 +109,8 @@ export class CanvasRuntime {
   private readonly hiDpiObserver: ResizeObserver;
 
   private paintWaiters: PaintWaiter[] = [];
+  private fallbackPaintScheduled = false;
+  private nativePaintRequestedForWaiters = false;
   private metrics: CanvasMetrics = {
     cssWidth: 0,
     cssHeight: 0,
@@ -305,8 +307,15 @@ export class CanvasRuntime {
    * @remarks
    * Native runtimes resolve after the browser delivers the canvas paint event
    * and Prism flushes the registered paint handlers. Fallback runtimes resolve
-   * after Prism runs the same paint pass directly. The method does not export
-   * image data; use standard canvas APIs after the promise resolves.
+   * after Prism runs the same synchronous paint pass directly. Multiple calls
+   * made before a paint completes resolve from that paint pass.
+   *
+   * Calling `paintOnce()` does not require `start()`. If it is called from
+   * inside `onPaint()`, it waits for the next paint pass; it never resolves from
+   * the pass that is already in progress and never recursively paints.
+   *
+   * The method does not export image data; use standard canvas APIs after the
+   * promise resolves.
    *
    * @returns A promise that resolves after one runtime-owned paint pass.
    */
@@ -324,13 +333,11 @@ export class CanvasRuntime {
       try {
         this.pendingPaint = true;
         if (this.backend.usesNativePaintEvent) {
-          this.backend.requestPaint(this.canvas);
+          this.requestNativePaintForWaiters();
           return;
         }
 
-        if (!this.isPainting) {
-          this.flushPaint(false);
-        }
+        this.scheduleFallbackPaint();
       } catch (error) {
         this.removePaintWaiter(waiter);
         reject(toError(error));
@@ -388,6 +395,8 @@ export class CanvasRuntime {
     if (this.backend.usesNativePaintEvent && hasNativeHtmlCanvas(this.canvas, this.ctx)) {
       this.canvas.onpaint = null;
     }
+    this.fallbackPaintScheduled = false;
+    this.nativePaintRequestedForWaiters = false;
     this.rejectPaintWaiters(
       new Error("Cannot complete paintOnce() after Prism CanvasRuntime is destroyed.")
     );
@@ -399,6 +408,7 @@ export class CanvasRuntime {
   private flushPaint(throwOnError = true): void {
     const waiters = this.paintWaiters;
     this.paintWaiters = [];
+    this.nativePaintRequestedForWaiters = false;
     this.pendingPaint = false;
     this.isPainting = true;
 
@@ -421,12 +431,40 @@ export class CanvasRuntime {
       for (const waiter of waiters) {
         waiter.reject(paintError);
       }
+      this.fallbackPaintScheduled = false;
+      this.nativePaintRequestedForWaiters = false;
+      this.rejectPaintWaiters(paintError);
       if (throwOnError) {
         throw paintError;
       }
     } finally {
       this.isPainting = false;
     }
+  }
+
+  private requestNativePaintForWaiters(): void {
+    if (this.nativePaintRequestedForWaiters) {
+      return;
+    }
+
+    this.nativePaintRequestedForWaiters = true;
+    this.backend.requestPaint(this.canvas);
+  }
+
+  private scheduleFallbackPaint(): void {
+    if (this.fallbackPaintScheduled) {
+      return;
+    }
+
+    this.fallbackPaintScheduled = true;
+    queueMicrotask(() => {
+      this.fallbackPaintScheduled = false;
+      if (this.destroyed || !this.pendingPaint || this.paintWaiters.length === 0) {
+        return;
+      }
+
+      this.flushPaint(false);
+    });
   }
 
   private removePaintWaiter(waiter: PaintWaiter): void {
