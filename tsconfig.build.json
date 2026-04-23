@@ -1,0 +1,16 @@
+{
+  "files": [],
+  "references": [
+    { "path": "./packages/math" },
+    { "path": "./packages/core" },
+    { "path": "./packages/html-canvas" },
+    { "path": "./packages/assets" },
+    { "path": "./packages/input" },
+    { "path": "./packages/scene" },
+    { "path": "./packages/renderer" },
+    { "path": "./packages/ui-dom" },
+    { "path": "./packages/shader-fx" },
+    { "path": "./apps/demo-cockpit" },
+    { "path": "./apps/demo-duck-hunt-todo" }
+  ]
+}
