@@ -34,5 +34,44 @@ export default tseslint.config(
     plugins: {
       tsdoc
     }
+  },
+  {
+    files: ["**/*.{js,mjs,cjs,ts,tsx}"],
+    ignores: ["packages/html-canvas/src/**"],
+    rules: {
+      "no-restricted-imports": [
+        "error",
+        {
+          patterns: [
+            {
+              group: [
+                "@prism/html-canvas/runtime",
+                "@prism/html-canvas/runtime/*",
+                "@prism/html-canvas/src/runtime",
+                "@prism/html-canvas/src/runtime/*",
+                "packages/html-canvas/src/runtime",
+                "packages/html-canvas/src/runtime/*",
+                "**/packages/html-canvas/src/runtime",
+                "**/packages/html-canvas/src/runtime/*",
+                "../html-canvas/src/runtime",
+                "../html-canvas/src/runtime/*",
+                "../../html-canvas/src/runtime",
+                "../../html-canvas/src/runtime/*",
+                "../../../html-canvas/src/runtime",
+                "../../../html-canvas/src/runtime/*",
+                "../../packages/html-canvas/src/runtime",
+                "../../packages/html-canvas/src/runtime/*",
+                "../../../packages/html-canvas/src/runtime",
+                "../../../packages/html-canvas/src/runtime/*",
+                "../../../../packages/html-canvas/src/runtime",
+                "../../../../packages/html-canvas/src/runtime/*"
+              ],
+              message:
+                "html-canvas runtime modules are internal. Use the public @prism/html-canvas entry point and CanvasRuntime façade instead."
+            }
+          ]
+        }
+      ]
+    }
   }
 );
