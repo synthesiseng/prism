@@ -58,6 +58,11 @@ export type CanvasRuntimeOptions = Readonly<{
   backend?: CanvasBackendPreference;
 }>;
 
+type PaintWaiter = Readonly<{
+  resolve(): void;
+  reject(error: unknown): void;
+}>;
+
 /**
  * Owns a 2D HTML-in-Canvas runtime for one canvas.
  *
@@ -103,6 +108,7 @@ export class CanvasRuntime {
   private readonly paintHandlers: PaintHandler[] = [];
   private readonly hiDpiObserver: ResizeObserver;
 
+  private paintWaiters: PaintWaiter[] = [];
   private metrics: CanvasMetrics = {
     cssWidth: 0,
     cssHeight: 0,
@@ -112,6 +118,7 @@ export class CanvasRuntime {
   };
   private frameTime: FrameTime = { now: 0, delta: 0, frame: 0 };
   private pendingPaint = true;
+  private isPainting = false;
   private destroyed = false;
 
   /**
@@ -293,6 +300,45 @@ export class CanvasRuntime {
   }
 
   /**
+   * Requests one paint pass and resolves after the runtime finishes painting it.
+   *
+   * @remarks
+   * Native runtimes resolve after the browser delivers the canvas paint event
+   * and Prism flushes the registered paint handlers. Fallback runtimes resolve
+   * after Prism runs the same paint pass directly. The method does not export
+   * image data; use standard canvas APIs after the promise resolves.
+   *
+   * @returns A promise that resolves after one runtime-owned paint pass.
+   */
+  paintOnce(): Promise<void> {
+    if (this.destroyed) {
+      return Promise.reject(
+        new Error("Cannot paint a destroyed Prism CanvasRuntime.")
+      );
+    }
+
+    return new Promise((resolve, reject) => {
+      const waiter: PaintWaiter = { resolve, reject };
+      this.paintWaiters.push(waiter);
+
+      try {
+        this.pendingPaint = true;
+        if (this.backend.usesNativePaintEvent) {
+          this.backend.requestPaint(this.canvas);
+          return;
+        }
+
+        if (!this.isPainting) {
+          this.flushPaint(false);
+        }
+      } catch (error) {
+        this.removePaintWaiter(waiter);
+        reject(toError(error));
+      }
+    });
+  }
+
+  /**
    * Schedules a paint pass.
    *
    * @remarks
@@ -342,22 +388,63 @@ export class CanvasRuntime {
     if (this.backend.usesNativePaintEvent && hasNativeHtmlCanvas(this.canvas, this.ctx)) {
       this.canvas.onpaint = null;
     }
+    this.rejectPaintWaiters(
+      new Error("Cannot complete paintOnce() after Prism CanvasRuntime is destroyed.")
+    );
     this.surfaces.clear();
     this.updateHandlers.length = 0;
     this.paintHandlers.length = 0;
   }
 
-  private flushPaint(): void {
+  private flushPaint(throwOnError = true): void {
+    const waiters = this.paintWaiters;
+    this.paintWaiters = [];
     this.pendingPaint = false;
-    flushPaintPass({
-      canvas: this.canvas,
-      ctx: this.ctx,
-      metrics: this.metrics,
-      backend: this.backend,
-      surfaces: this.surfaces,
-      handlers: this.paintHandlers,
-      time: this.frameTime,
-      invalidate: () => this.invalidate()
-    });
+    this.isPainting = true;
+
+    try {
+      flushPaintPass({
+        canvas: this.canvas,
+        ctx: this.ctx,
+        metrics: this.metrics,
+        backend: this.backend,
+        surfaces: this.surfaces,
+        handlers: this.paintHandlers,
+        time: this.frameTime,
+        invalidate: () => this.invalidate()
+      });
+      for (const waiter of waiters) {
+        waiter.resolve();
+      }
+    } catch (error) {
+      const paintError = toError(error);
+      for (const waiter of waiters) {
+        waiter.reject(paintError);
+      }
+      if (throwOnError) {
+        throw paintError;
+      }
+    } finally {
+      this.isPainting = false;
+    }
   }
+
+  private removePaintWaiter(waiter: PaintWaiter): void {
+    const index = this.paintWaiters.indexOf(waiter);
+    if (index !== -1) {
+      this.paintWaiters.splice(index, 1);
+    }
+  }
+
+  private rejectPaintWaiters(error: Error): void {
+    const waiters = this.paintWaiters;
+    this.paintWaiters = [];
+    for (const waiter of waiters) {
+      waiter.reject(error);
+    }
+  }
+}
+
+function toError(error: unknown): Error {
+  return error instanceof Error ? error : new Error(String(error));
 }
