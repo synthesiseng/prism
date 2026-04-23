@@ -1,4 +1,5 @@
 import js from "@eslint/js";
+import tsdoc from "eslint-plugin-tsdoc";
 import tseslint from "typescript-eslint";
 
 export default tseslint.config(
@@ -27,7 +28,11 @@ export default tseslint.config(
         { "prefer": "type-imports" }
       ],
       "@typescript-eslint/no-confusing-void-expression": "off",
-      "@typescript-eslint/no-non-null-assertion": "off"
+      "@typescript-eslint/no-non-null-assertion": "off",
+      "tsdoc/syntax": "error"
+    },
+    plugins: {
+      tsdoc
     }
   }
 );
