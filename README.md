@@ -114,6 +114,21 @@ runtime.start();
 
 Call `surface.dispose()` or `runtime.unregisterSurface(surface)` when a surface leaves the runtime. Undrawn surfaces are inactive for pointer/focus handling until they are drawn again.
 
+### Paint readiness and export
+
+Use `paintOnce()` when code needs to wait for Prism to complete one runtime-owned paint pass, such as before exporting the canvas.
+
+```ts
+await document.fonts.ready;
+await runtime.paintOnce();
+
+const blob = await new Promise<Blob | null>((resolve) => {
+  canvas.toBlob(resolve, "image/png");
+});
+```
+
+Export still uses normal canvas APIs after readiness. If a surface depends on images or custom fonts, make sure those resources are loaded or decoded before calling `paintOnce()`.
+
 ## Avoiding Boundary Drift
 
 - Do not import app code from packages.
