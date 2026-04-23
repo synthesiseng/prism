@@ -80,7 +80,7 @@ export class SurfaceRegistry {
 
   assertRegistered(surface: CanvasSurface): void {
     if (!this.records.some((record) => record.surface === surface)) {
-      throw new Error("Prism CanvasRuntime can only draw surfaces registered with this runtime.");
+      throw new Error("Prism CanvasRuntime can only use surfaces registered with this runtime.");
     }
   }
 
