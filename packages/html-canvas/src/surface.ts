@@ -4,7 +4,9 @@ import { Rect, type RectLike } from "@prism/math";
  * Describes a surface rectangle in runtime CSS pixels.
  *
  * @remarks
- * A function can be used when bounds are driven by mutable application state.
+ * This is the public coordinate space for surfaces. Prism converts these bounds
+ * to canvas backing-store pixels when drawing. A function can be used when
+ * bounds are driven by mutable application state.
  */
 export type SurfaceBoundsInput = RectLike | (() => RectLike);
 

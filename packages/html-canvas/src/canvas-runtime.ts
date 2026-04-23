@@ -71,7 +71,12 @@ type PaintWaiter = Readonly<{
  * scheduling, native/fallback backend selection, HiDPI sizing, DOM transform
  * sync, invalidation, and coordinate conversion. Surface bounds and client
  * input coordinates are CSS pixels; the runtime converts to backing-store
- * pixels when drawing.
+ * pixels when drawing registered surfaces.
+ *
+ * Paint handlers receive the real 2D canvas context. Direct drawing with `ctx`
+ * uses normal canvas/backing-store pixel coordinates; use the runtime
+ * conversion helpers when aligning manual canvas drawing with CSS-space
+ * surfaces.
  *
  * Native HTML-in-Canvas is preferred when available. The fallback backend is a
  * lower-fidelity compatibility path and should not shape application code.
@@ -222,7 +227,8 @@ export class CanvasRuntime {
    * @remarks
    * Prism stores the element's original DOM owner and selected attributes, then
    * moves the element under the runtime canvas so native HTML-in-Canvas can draw
-   * it. Dispose or unregister the returned surface to restore ownership.
+   * it. Surface bounds are expressed in CSS pixels. Dispose or unregister the
+   * returned surface to restore ownership.
    *
    * @param element - HTML element represented by the surface.
    * @param options - Surface bounds and accessibility options.
@@ -249,6 +255,11 @@ export class CanvasRuntime {
 
   /**
    * Converts viewport client coordinates into runtime CSS-pixel coordinates.
+   *
+   * @remarks
+   * Use this for pointer and mouse input. The returned point is in the same
+   * CSS-pixel coordinate space used by registered surface bounds, not the
+   * canvas backing-store pixel space used by direct `ctx` drawing.
    *
    * @param clientX - Pointer or mouse X coordinate from a DOM event.
    * @param clientY - Pointer or mouse Y coordinate from a DOM event.
@@ -291,6 +302,10 @@ export class CanvasRuntime {
 
   /**
    * Registers a paint handler.
+   *
+   * @remarks
+   * `drawSurface()` accepts surfaces whose bounds are CSS pixels. Direct drawing
+   * through `ctx` uses the canvas backing-store pixel coordinate space.
    *
    * @param handler - Function called when the runtime paints.
    * @returns This runtime for chaining.
