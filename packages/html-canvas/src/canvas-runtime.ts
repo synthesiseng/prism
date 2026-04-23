@@ -248,8 +248,15 @@ export class CanvasRuntime {
    * Unregisters a surface and restores its original DOM ownership.
    *
    * @param surface - Surface returned by `registerSurface()`.
+   *
+   * @throws Error when the surface is still active but belongs to another runtime.
    */
   unregisterSurface(surface: CanvasSurface): void {
+    if (surface.isDisposed) {
+      return;
+    }
+
+    this.surfaces.assertRegistered(surface);
     surface.dispose();
   }
 
