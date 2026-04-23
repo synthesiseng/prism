@@ -16,25 +16,36 @@ export function observeHiDpiCanvas(
       return;
     }
 
-    const pixelRatio = globalThis.devicePixelRatio || 1;
-    const box = entry.devicePixelContentBoxSize[0];
-    const pixelWidth = box
-      ? box.inlineSize
-      : Math.round(entry.contentRect.width * pixelRatio);
-    const pixelHeight = box
-      ? box.blockSize
-      : Math.round(entry.contentRect.height * pixelRatio);
-    const cssWidth = pixelWidth / pixelRatio;
-    const cssHeight = pixelHeight / pixelRatio;
-
-    if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
-      canvas.width = pixelWidth;
-      canvas.height = pixelHeight;
-    }
-
-    onResize({ cssWidth, cssHeight, pixelWidth, pixelHeight, pixelRatio });
+    onResize(resizeCanvasToDisplaySize(canvas, entry));
   });
 
-  observer.observe(canvas, { box: "device-pixel-content-box" });
+  try {
+    observer.observe(canvas, { box: "device-pixel-content-box" });
+  } catch {
+    observer.observe(canvas);
+  }
   return observer;
+}
+
+export function resizeCanvasToDisplaySize(
+  canvas: HTMLCanvasElement,
+  entry?: ResizeObserverEntry
+): CanvasMetrics {
+  const pixelRatio = globalThis.devicePixelRatio || 1;
+  const devicePixelBox = entry
+    ? (entry as Partial<Pick<ResizeObserverEntry, "devicePixelContentBoxSize">>)
+        .devicePixelContentBoxSize
+    : undefined;
+  const box = devicePixelBox?.[0];
+  const cssWidth = entry?.contentRect.width ?? canvas.clientWidth;
+  const cssHeight = entry?.contentRect.height ?? canvas.clientHeight;
+  const pixelWidth = Math.max(1, Math.round(box?.inlineSize ?? cssWidth * pixelRatio));
+  const pixelHeight = Math.max(1, Math.round(box?.blockSize ?? cssHeight * pixelRatio));
+
+  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
+    canvas.width = pixelWidth;
+    canvas.height = pixelHeight;
+  }
+
+  return { cssWidth, cssHeight, pixelWidth, pixelHeight, pixelRatio };
 }

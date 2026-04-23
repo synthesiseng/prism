@@ -1,6 +1,8 @@
 {
   "name": "@prism/ui-dom",
   "version": "0.1.0",
+  "private": true,
+  "description": "Legacy DOM texture bridge retained outside Prism v1.",
   "type": "module",
   "sideEffects": false,
   "exports": {

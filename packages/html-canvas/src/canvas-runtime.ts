@@ -8,10 +8,19 @@ import {
   hasNativeHtmlCanvas,
   type HtmlCanvasContext2D
 } from "./experimental-types";
-import { observeHiDpiCanvas, type CanvasMetrics } from "./hidpi";
-import { CanvasSurface, type SurfaceOptions } from "./surface";
+import {
+  observeHiDpiCanvas,
+  resizeCanvasToDisplaySize,
+  type CanvasMetrics
+} from "./hidpi";
+import { CanvasSurface, setSurfaceLifecycle, type SurfaceOptions } from "./surface";
 
 export type UpdateHandler = (time: FrameTime) => void;
+
+export type CanvasPoint = Readonly<{
+  x: number;
+  y: number;
+}>;
 
 export type PaintHandler = (api: {
   ctx: HtmlCanvasContext2D;
@@ -20,17 +29,34 @@ export type PaintHandler = (api: {
   invalidate: () => void;
 }) => void;
 
+export type CanvasBackendKind = RuntimeBackend["kind"];
+export type CanvasBackendPreference = "auto" | CanvasBackendKind;
+
 export type CanvasRuntimeOptions = Readonly<{
-  backend?: "auto" | "native" | "fallback";
+  backend?: CanvasBackendPreference;
 }>;
+
+type SurfaceDomState = Readonly<{
+  parent: Node | null;
+  nextSibling: Node | null;
+  style: string | null;
+  ariaLabel: string | null;
+  prismSurface: string | null;
+  inert: boolean | undefined;
+}>;
+
+type SurfaceRecord = {
+  readonly surface: CanvasSurface;
+  readonly domState: SurfaceDomState;
+};
 
 export class CanvasRuntime {
   readonly canvas: HTMLCanvasElement;
   readonly ctx: HtmlCanvasContext2D;
-  readonly backend: RuntimeBackend;
 
+  private readonly backend: RuntimeBackend;
   private readonly loop: FrameLoop;
-  private readonly surfaces: CanvasSurface[] = [];
+  private readonly surfaces: SurfaceRecord[] = [];
   private readonly updateHandlers: UpdateHandler[] = [];
   private readonly paintHandlers: PaintHandler[] = [];
   private readonly hiDpiObserver: ResizeObserver;
@@ -44,6 +70,7 @@ export class CanvasRuntime {
   };
   private frameTime: FrameTime = { now: 0, delta: 0, frame: 0 };
   private pendingPaint = true;
+  private destroyed = false;
 
   constructor(canvas: HTMLCanvasElement, options: CanvasRuntimeOptions = {}) {
     this.canvas = canvas;
@@ -65,7 +92,9 @@ export class CanvasRuntime {
         for (const handler of this.updateHandlers) {
           handler(time);
         }
-        this.pendingPaint = true;
+        if (this.updateHandlers.length > 0) {
+          this.pendingPaint = true;
+        }
       },
       render: () => {
         if (!this.pendingPaint) {
@@ -110,34 +139,80 @@ export class CanvasRuntime {
     return this.metrics.pixelRatio;
   }
 
+  get backendKind(): CanvasBackendKind {
+    return this.backend.kind;
+  }
+
   registerSurface(element: HTMLElement, options: SurfaceOptions): CanvasSurface {
+    if (this.destroyed) {
+      throw new Error("Cannot register a surface on a destroyed Prism CanvasRuntime.");
+    }
+
+    const existingRecord = this.findSurfaceRecordByElement(element);
+    if (existingRecord) {
+      return existingRecord.surface;
+    }
+
+    const domState = snapshotSurfaceDomState(element);
     if (element.parentElement !== this.canvas) {
       this.canvas.appendChild(element);
     }
 
     const surface = new CanvasSurface(element, options);
+    setSurfaceLifecycle(surface, {
+      unregister: (target) => {
+        this.unregisterSurfaceRecord(target);
+      }
+    });
     surface.element.style.position = "absolute";
     surface.element.style.left = "0";
     surface.element.style.top = "0";
     surface.element.style.transformOrigin = "0 0";
     setSurfaceInteractivity(surface, false);
-    this.surfaces.push(surface);
+    this.surfaces.push({ surface, domState });
     this.invalidate();
     return surface;
   }
 
-  clientToCanvasPoint(clientX: number, clientY: number): { x: number; y: number } {
+  unregisterSurface(surface: CanvasSurface): void {
+    surface.dispose();
+  }
+
+  private unregisterSurfaceRecord(surface: CanvasSurface): void {
+    const index = this.surfaces.findIndex((record) => record.surface === surface);
+    if (index === -1) {
+      return;
+    }
+
+    const [record] = this.surfaces.splice(index, 1);
+    if (!record) {
+      return;
+    }
+
+    setSurfaceInteractivity(record.surface, false);
+    restoreSurfaceDomState(record.surface.element, record.domState);
+    this.invalidate();
+  }
+
+  clientToCanvasPoint(clientX: number, clientY: number): CanvasPoint {
     const rect = this.canvas.getBoundingClientRect();
-    const scaleX = rect.width > 0 ? this.canvas.width / rect.width : 1;
-    const scaleY = rect.height > 0 ? this.canvas.height / rect.height : 1;
     return {
-      x: (clientX - rect.left) * scaleX,
-      y: (clientY - rect.top) * scaleY
+      x: clientX - rect.left,
+      y: clientY - rect.top
     };
   }
 
   cssLengthToCanvasPixels(length: number): number {
     return length * this.metrics.pixelRatio;
+  }
+
+  cssPointToCanvasPixels(point: CanvasPoint): CanvasPoint {
+    const scaleX = this.width > 0 ? this.canvas.width / this.width : this.metrics.pixelRatio;
+    const scaleY = this.height > 0 ? this.canvas.height / this.height : this.metrics.pixelRatio;
+    return {
+      x: point.x * scaleX,
+      y: point.y * scaleY
+    };
   }
 
   onUpdate(handler: UpdateHandler): this {
@@ -147,10 +222,15 @@ export class CanvasRuntime {
 
   onPaint(handler: PaintHandler): this {
     this.paintHandlers.push(handler);
+    this.invalidate();
     return this;
   }
 
   invalidate(): void {
+    if (this.destroyed) {
+      return;
+    }
+
     this.pendingPaint = true;
     if (this.backend.usesNativePaintEvent) {
       this.backend.requestPaint(this.canvas);
@@ -166,25 +246,35 @@ export class CanvasRuntime {
   }
 
   destroy(): void {
+    if (this.destroyed) {
+      return;
+    }
+
+    this.destroyed = true;
     this.stop();
     this.hiDpiObserver.disconnect();
     if (this.backend.usesNativePaintEvent && hasNativeHtmlCanvas(this.canvas, this.ctx)) {
       this.canvas.onpaint = null;
     }
+    for (const record of [...this.surfaces]) {
+      record.surface.dispose();
+    }
+    this.updateHandlers.length = 0;
+    this.paintHandlers.length = 0;
   }
 
   private flushPaint(): void {
     this.pendingPaint = false;
     this.ctx.reset();
     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-    for (const surface of this.surfaces) {
-      setSurfaceInteractivity(surface, false);
+    for (const record of this.surfaces) {
+      setSurfaceInteractivity(record.surface, false);
     }
 
     const drawSurface = (surface: CanvasSurface): void => {
       assertRegisteredSurface(this.surfaces, surface);
       const cssBounds = surface.getBounds();
-      const pixelBounds = this.cssRectToCanvasRect(cssBounds);
+      const pixelBounds = this.cssRectToCanvasPixels(cssBounds);
       this.backend.render(
         { ctx: this.ctx, time: this.frameTime },
         [{ surface, cssBounds, pixelBounds }],
@@ -204,7 +294,7 @@ export class CanvasRuntime {
     }
   }
 
-  private cssRectToCanvasRect(bounds: RectLike): Rect {
+  private cssRectToCanvasPixels(bounds: RectLike): Rect {
     const scaleX = this.width > 0 ? this.canvas.width / this.width : 1;
     const scaleY = this.height > 0 ? this.canvas.height / this.height : 1;
     return new Rect(
@@ -213,6 +303,10 @@ export class CanvasRuntime {
       bounds.width * scaleX,
       bounds.height * scaleY
     );
+  }
+
+  private findSurfaceRecordByElement(element: HTMLElement): SurfaceRecord | undefined {
+    return this.surfaces.find((record) => record.surface.element === element);
   }
 }
 
@@ -231,7 +325,7 @@ function resolveBackend(
     }
   }
 
-  return new FallbackCanvasBackend();
+  return new FallbackCanvasBackend(() => canvas.ownerDocument.createElement("canvas"));
 }
 
 function syncSurfaceElement(surface: CanvasSurface, transform: DOMMatrix, bounds: Rect): void {
@@ -250,25 +344,63 @@ function setSurfaceInteractivity(surface: CanvasSurface, active: boolean): void 
 }
 
 function assertRegisteredSurface(
-  surfaces: readonly CanvasSurface[],
+  surfaces: readonly SurfaceRecord[],
   surface: CanvasSurface
 ): void {
-  if (!surfaces.includes(surface)) {
+  if (!surfaces.some((record) => record.surface === surface)) {
     throw new Error("Prism CanvasRuntime can only draw surfaces registered with this runtime.");
   }
 }
 
-function initializeCanvasMetrics(canvas: HTMLCanvasElement): CanvasMetrics {
-  const pixelRatio = globalThis.devicePixelRatio || 1;
-  const cssWidth = canvas.clientWidth;
-  const cssHeight = canvas.clientHeight;
-  const pixelWidth = Math.max(1, Math.round(cssWidth * pixelRatio));
-  const pixelHeight = Math.max(1, Math.round(cssHeight * pixelRatio));
+function snapshotSurfaceDomState(element: HTMLElement): SurfaceDomState {
+  const inertElement = element as HTMLElement & { inert?: boolean };
+  return {
+    parent: element.parentNode,
+    nextSibling: element.nextSibling,
+    style: element.getAttribute("style"),
+    ariaLabel: element.getAttribute("aria-label"),
+    prismSurface: element.getAttribute("data-prism-surface"),
+    inert: "inert" in inertElement ? inertElement.inert : undefined
+  };
+}
 
-  if (canvas.width !== pixelWidth || canvas.height !== pixelHeight) {
-    canvas.width = pixelWidth;
-    canvas.height = pixelHeight;
+function restoreSurfaceDomState(element: HTMLElement, state: SurfaceDomState): void {
+  restoreAttribute(element, "style", state.style);
+  restoreAttribute(element, "aria-label", state.ariaLabel);
+  restoreAttribute(element, "data-prism-surface", state.prismSurface);
+
+  const inertElement = element as HTMLElement & { inert?: boolean };
+  if (state.inert === undefined) {
+    if ("inert" in inertElement) {
+      inertElement.inert = false;
+    }
+  } else {
+    inertElement.inert = state.inert;
   }
 
-  return { cssWidth, cssHeight, pixelWidth, pixelHeight, pixelRatio };
+  if (state.parent) {
+    state.parent.insertBefore(
+      element,
+      state.nextSibling?.parentNode === state.parent ? state.nextSibling : null
+    );
+  } else {
+    element.remove();
+  }
+}
+
+function restoreAttribute(
+  element: HTMLElement,
+  name: string,
+  value: string | null
+): void {
+  if (value === null) {
+    element.removeAttribute(name);
+    return;
+  }
+
+  element.setAttribute(name, value);
+}
+
+function initializeCanvasMetrics(canvas: HTMLCanvasElement): CanvasMetrics {
+  return resizeCanvasToDisplaySize(canvas);
 }
