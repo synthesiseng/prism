@@ -1,8 +1,24 @@
 {
   "name": "prism",
-  "version": "0.1.0",
+  "version": "0.1.0-alpha.1",
   "private": true,
+  "description": "Native-first HTML-in-Canvas runtime for treating HTML/CSS as runtime-managed canvas surfaces.",
+  "license": "MIT",
   "type": "module",
+  "homepage": "https://github.com/synsoftworks/prism#readme",
+  "bugs": {
+    "url": "https://github.com/synsoftworks/prism/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/synsoftworks/prism.git"
+  },
+  "keywords": [
+    "canvas",
+    "html-in-canvas",
+    "html-canvas",
+    "runtime"
+  ],
   "packageManager": "pnpm@9.15.4",
   "scripts": {
     "build": "tsc -b tsconfig.build.json",

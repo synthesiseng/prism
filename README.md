@@ -10,6 +10,16 @@ It manages HTML surface registration, paint lifecycle, sizing, transform sync, i
 
 ## Installation
 
+Prism is not published to a package registry yet. In this repository, install
+the workspace dependencies and import `@prism/html-canvas` through the workspace
+TypeScript aliases.
+
+```sh
+pnpm install
+```
+
+When the package is published, the intended install path is:
+
 ```sh
 pnpm add @prism/html-canvas
 ```
@@ -122,6 +132,8 @@ Options:
 
 ### Properties
 
+- `canvas`
+- `ctx`
 - `width`
 - `height`
 - `pixelRatio`
@@ -160,7 +172,8 @@ Options:
 
 ## Native Support
 
-Native HTML-in-Canvas currently requires the Chrome Canary flag:
+Native HTML-in-Canvas currently requires a Chromium build with the
+`canvas-draw-element` flag enabled. Chrome Canary is the primary target.
 
 ```txt
 chrome://flags/#canvas-draw-element
@@ -176,7 +189,9 @@ pnpm lint
 pnpm build
 ```
 
-#Prism is built around the [HTML-in-Canvas proposal](https://github.com/WICG/html-in-canvas)
+## Platform Credit
+
+Prism is built around the [HTML-in-Canvas proposal](https://github.com/WICG/html-in-canvas)
 and related standards work in the WICG. All credit for the underlying platform
 capability goes to the proposal authors and the WICG.
 
