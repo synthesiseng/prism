@@ -268,6 +268,76 @@ describe("CanvasRuntime", () => {
     runtime.destroy();
   });
 
+  it("resolves paintOnce after a fallback paint pass", async () => {
+    const canvas = new FakeCanvas(false);
+    canvas.ownerDocument = document;
+    const element = document.createElement("section");
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+      bounds: { x: 20, y: 30, width: 100, height: 50 }
+    });
+    let paintCount = 0;
+
+    runtime.onPaint(({ drawSurface }) => {
+      paintCount += 1;
+      drawSurface(surface);
+    });
+
+    await runtime.paintOnce();
+
+    expect(paintCount).toBe(1);
+    expect(canvas.context.drawImageCount).toBe(1);
+    expect(element.style.pointerEvents).toBe("auto");
+
+    runtime.destroy();
+  });
+
+  it("resolves paintOnce after the native paint event is flushed", async () => {
+    const canvas = new FakeCanvas(true);
+    canvas.ownerDocument = document;
+    const element = document.createElement("section");
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+      bounds: { x: 20, y: 30, width: 100, height: 50 }
+    });
+    let resolved = false;
+
+    runtime.onPaint(({ drawSurface }) => {
+      drawSurface(surface);
+    });
+
+    canvas.requestPaintCount = 0;
+    const paint = runtime.paintOnce().then(() => {
+      resolved = true;
+    });
+
+    await Promise.resolve();
+
+    expect(canvas.requestPaintCount).toBe(1);
+    expect(resolved).toBe(false);
+
+    canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+    await paint;
+
+    expect(resolved).toBe(true);
+    expect(element.style.pointerEvents).toBe("auto");
+
+    runtime.destroy();
+  });
+
+  it("rejects pending paintOnce work when the runtime is destroyed", async () => {
+    const canvas = new FakeCanvas(true);
+    canvas.ownerDocument = document;
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+    const paint = runtime.paintOnce();
+    runtime.destroy();
+
+    await expect(paint).rejects.toThrow(
+      "Cannot complete paintOnce() after Prism CanvasRuntime is destroyed."
+    );
+  });
+
   it("keeps undrawn surfaces inactive", () => {
     const canvas = new FakeCanvas(false);
     canvas.ownerDocument = document;
