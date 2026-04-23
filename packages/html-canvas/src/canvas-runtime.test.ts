@@ -349,6 +349,77 @@ describe("CanvasRuntime", () => {
     runtime.destroy();
   });
 
+  it("resolves concurrent native paintOnce calls from the same browser paint event", async () => {
+    const canvas = new FakeCanvas(true);
+    canvas.ownerDocument = document;
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+    let paintCount = 0;
+    let firstResolved = false;
+    let secondResolved = false;
+
+    runtime.onPaint(() => {
+      paintCount += 1;
+    });
+
+    canvas.requestPaintCount = 0;
+    const firstPaint = runtime.paintOnce().then(() => {
+      firstResolved = true;
+    });
+    const secondPaint = runtime.paintOnce().then(() => {
+      secondResolved = true;
+    });
+
+    await Promise.resolve();
+
+    expect(canvas.requestPaintCount).toBe(1);
+    expect(firstResolved).toBe(false);
+    expect(secondResolved).toBe(false);
+
+    canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+    await Promise.all([firstPaint, secondPaint]);
+
+    expect(paintCount).toBe(1);
+    expect(firstResolved).toBe(true);
+    expect(secondResolved).toBe(true);
+
+    runtime.destroy();
+  });
+
+  it("resolves native paintOnce called inside onPaint from the next browser paint event", async () => {
+    const canvas = new FakeCanvas(true);
+    canvas.ownerDocument = document;
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+    let paintCount = 0;
+    const nestedPaints: Array<Promise<void>> = [];
+    let nestedResolvedAtPaintCount = 0;
+
+    runtime.onPaint(() => {
+      paintCount += 1;
+      if (nestedPaints.length === 0) {
+        nestedPaints.push(runtime.paintOnce().then(() => {
+          nestedResolvedAtPaintCount = paintCount;
+        }));
+      }
+    });
+
+    canvas.requestPaintCount = 0;
+    const firstPaint = runtime.paintOnce();
+    canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+    await firstPaint;
+
+    expect(nestedPaints).toHaveLength(1);
+    expect(canvas.requestPaintCount).toBe(2);
+    expect(nestedResolvedAtPaintCount).toBe(0);
+
+    canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+    await Promise.all(nestedPaints);
+
+    expect(paintCount).toBe(2);
+    expect(nestedResolvedAtPaintCount).toBe(2);
+
+    runtime.destroy();
+  });
+
   it("resolves paintOnce called inside onPaint from the next fallback paint pass", async () => {
     const canvas = new FakeCanvas(false);
     canvas.ownerDocument = document;
@@ -403,6 +474,26 @@ describe("CanvasRuntime", () => {
     expect(() => {
       (runtime as unknown as RuntimeInternals).flushPaint();
     }).toThrow("paint failed");
+
+    runtime.destroy();
+  });
+
+  it("rejects native paintOnce waiters with paint handler errors", async () => {
+    const canvas = new FakeCanvas(true);
+    canvas.ownerDocument = document;
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+    runtime.onPaint(() => {
+      throw new Error("native paint failed");
+    });
+
+    const paint = runtime.paintOnce();
+    const rejected = expect(paint).rejects.toThrow("native paint failed");
+
+    expect(() => {
+      canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+    }).toThrow("native paint failed");
+    await rejected;
 
     runtime.destroy();
   });
