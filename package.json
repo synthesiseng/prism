@@ -1,10 +1,26 @@
 {
-  "name": "prism",
+  "name": "@synsoftworks/prism",
   "version": "0.1.0-alpha.1",
-  "private": true,
   "description": "Native-first HTML-in-Canvas runtime for treating HTML/CSS as runtime-managed canvas surfaces.",
   "license": "MIT",
   "type": "module",
+  "main": "./packages/html-canvas/dist/index.js",
+  "types": "./packages/html-canvas/dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./packages/html-canvas/dist/index.d.ts",
+      "import": "./packages/html-canvas/dist/index.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "packages/html-canvas/dist",
+    "packages/core/dist",
+    "packages/math/dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "sideEffects": false,
   "homepage": "https://github.com/synsoftworks/prism#readme",
   "bugs": {
     "url": "https://github.com/synsoftworks/prism/issues"
@@ -20,12 +36,16 @@
     "runtime"
   ],
   "packageManager": "pnpm@9.15.4",
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
     "test": "vitest run",
     "lint": "eslint .",
     "typecheck": "tsc -b tsconfig.build.json",
-    "format": "prettier --write ."
+    "format": "prettier --write .",
+    "prepack": "pnpm build && node scripts/prepare-package.mjs"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
