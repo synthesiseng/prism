@@ -1,11 +1,16 @@
 import { useState } from "react";
 import { BringForwardIcon, SendBackwardIcon, SynthesisWord } from "./icons";
 import type {
+  ChangelogSurfaceModel,
   ComposerSurface,
   DocsSurfaceModel,
   HeroSurfaceModel,
+  InstallSurfaceModel,
+  QuoteSurfaceModel,
   StageFormat,
-  TemplateId
+  StatSurfaceModel,
+  TemplateId,
+  WordmarkSurfaceModel
 } from "./composer/types";
 import { stageFormats } from "./composer/state";
 import { templateRegistry } from "./templates/registry";
@@ -289,6 +294,51 @@ function ContentFields({
           />
         </div>
       );
+    case "stat":
+      return (
+        <StatFields
+          surface={surface}
+          onChange={(nextSurface) => {
+            onSurfaceChange(nextSurface);
+          }}
+        />
+      );
+    case "quote":
+      return (
+        <QuoteFields
+          surface={surface}
+          onChange={(nextSurface) => {
+            onSurfaceChange(nextSurface);
+          }}
+        />
+      );
+    case "changelog":
+      return (
+        <ChangelogFields
+          surface={surface}
+          onChange={(nextSurface) => {
+            onSurfaceChange(nextSurface);
+          }}
+        />
+      );
+    case "wordmark":
+      return (
+        <WordmarkFields
+          surface={surface}
+          onChange={(nextSurface) => {
+            onSurfaceChange(nextSurface);
+          }}
+        />
+      );
+    case "install":
+      return (
+        <InstallFields
+          surface={surface}
+          onChange={(nextSurface) => {
+            onSurfaceChange(nextSurface);
+          }}
+        />
+      );
   }
 }
 
@@ -409,6 +459,227 @@ function DocsFields({
           value={surface.content.meta}
           onChange={(event) => {
             setContent({ meta: event.currentTarget.value });
+          }}
+        />
+      </div>
+    </>
+  );
+}
+
+function StatFields({
+  surface,
+  onChange
+}: Readonly<{
+  surface: StatSurfaceModel;
+  onChange(surface: StatSurfaceModel): void;
+}>) {
+  const setContent = (patch: Partial<StatSurfaceModel["content"]>): void => {
+    onChange({ ...surface, content: { ...surface.content, ...patch } });
+  };
+
+  return (
+    <>
+      <div className="field-row">
+        <input
+          className="field"
+          placeholder="Value"
+          value={surface.content.value}
+          onChange={(event) => {
+            setContent({ value: event.currentTarget.value });
+          }}
+        />
+      </div>
+      <div className="field-row">
+        <input
+          className="field"
+          placeholder="Label"
+          value={surface.content.label}
+          onChange={(event) => {
+            setContent({ label: event.currentTarget.value });
+          }}
+        />
+      </div>
+      <div className="field-row">
+        <input
+          className="field"
+          placeholder="Subtext"
+          value={surface.content.sub}
+          onChange={(event) => {
+            setContent({ sub: event.currentTarget.value });
+          }}
+        />
+      </div>
+    </>
+  );
+}
+
+function QuoteFields({
+  surface,
+  onChange
+}: Readonly<{
+  surface: QuoteSurfaceModel;
+  onChange(surface: QuoteSurfaceModel): void;
+}>) {
+  const setContent = (patch: Partial<QuoteSurfaceModel["content"]>): void => {
+    onChange({ ...surface, content: { ...surface.content, ...patch } });
+  };
+
+  return (
+    <>
+      <div className="field-row">
+        <textarea
+          className="field field-multi"
+          placeholder="Quote"
+          value={surface.content.quote}
+          onChange={(event) => {
+            setContent({ quote: event.currentTarget.value });
+          }}
+        />
+      </div>
+      <div className="field-row">
+        <input
+          className="field"
+          placeholder="Author"
+          value={surface.content.author}
+          onChange={(event) => {
+            setContent({ author: event.currentTarget.value });
+          }}
+        />
+      </div>
+      <div className="field-row">
+        <input
+          className="field"
+          placeholder="Role"
+          value={surface.content.role}
+          onChange={(event) => {
+            setContent({ role: event.currentTarget.value });
+          }}
+        />
+      </div>
+    </>
+  );
+}
+
+function ChangelogFields({
+  surface,
+  onChange
+}: Readonly<{
+  surface: ChangelogSurfaceModel;
+  onChange(surface: ChangelogSurfaceModel): void;
+}>) {
+  const setContent = (patch: Partial<ChangelogSurfaceModel["content"]>): void => {
+    onChange({ ...surface, content: { ...surface.content, ...patch } });
+  };
+  const setItemText = (index: number, text: string): void => {
+    setContent({
+      items: surface.content.items.map((item, itemIndex) =>
+        itemIndex === index ? { ...item, text } : item
+      )
+    });
+  };
+
+  return (
+    <>
+      <div className="field-row">
+        <input
+          className="field"
+          placeholder="Version"
+          value={surface.content.version}
+          onChange={(event) => {
+            setContent({ version: event.currentTarget.value });
+          }}
+        />
+      </div>
+      <div className="field-row">
+        <input
+          className="field"
+          placeholder="Date"
+          value={surface.content.date}
+          onChange={(event) => {
+            setContent({ date: event.currentTarget.value });
+          }}
+        />
+      </div>
+      {surface.content.items.map((item, index) => (
+        <div className="field-row" key={`${item.tag}-${String(index)}`}>
+          <input
+            className="field"
+            placeholder={`Item ${String(index + 1)}`}
+            value={item.text}
+            onChange={(event) => {
+              setItemText(index, event.currentTarget.value);
+            }}
+          />
+        </div>
+      ))}
+    </>
+  );
+}
+
+function WordmarkFields({
+  surface,
+  onChange
+}: Readonly<{
+  surface: WordmarkSurfaceModel;
+  onChange(surface: WordmarkSurfaceModel): void;
+}>) {
+  return (
+    <div className="field-row">
+      <input
+        className="field"
+        placeholder="Tagline"
+        value={surface.content.tag}
+        onChange={(event) => {
+          onChange({
+            ...surface,
+            content: { tag: event.currentTarget.value }
+          });
+        }}
+      />
+    </div>
+  );
+}
+
+function InstallFields({
+  surface,
+  onChange
+}: Readonly<{
+  surface: InstallSurfaceModel;
+  onChange(surface: InstallSurfaceModel): void;
+}>) {
+  const setContent = (patch: Partial<InstallSurfaceModel["content"]>): void => {
+    onChange({ ...surface, content: { ...surface.content, ...patch } });
+  };
+
+  return (
+    <>
+      <div className="field-row">
+        <input
+          className="field"
+          placeholder="Badge"
+          value={surface.content.badge}
+          onChange={(event) => {
+            setContent({ badge: event.currentTarget.value });
+          }}
+        />
+      </div>
+      <div className="field-row">
+        <input
+          className="field"
+          placeholder="Title"
+          value={surface.content.title}
+          onChange={(event) => {
+            setContent({ title: event.currentTarget.value });
+          }}
+        />
+      </div>
+      <div className="field-row">
+        <input
+          className="field"
+          placeholder="Command"
+          value={surface.content.command}
+          onChange={(event) => {
+            setContent({ command: event.currentTarget.value });
           }}
         />
       </div>
