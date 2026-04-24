@@ -8,6 +8,6 @@
     "preview": "vite preview --host 127.0.0.1"
   },
   "dependencies": {
-    "@prism/html-canvas": "workspace:*"
+    "@synthesisengineering/prism": "workspace:*"
   }
 }

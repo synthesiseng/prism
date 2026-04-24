@@ -1,23 +1,12 @@
-# Prism
+<h1 align="center">Prism</h1>
 
-Prism is a native-first HTML-in-Canvas runtime for treating HTML/CSS as first-class canvas surfaces.
+<p align="center">
+  Native-first HTML-in-Canvas runtime for treating HTML/CSS as first-class canvas surfaces.
+</p>
 
 It manages HTML surface registration, paint lifecycle, sizing, transform sync, invalidation, and paint readiness so app code does not need to coordinate raw `onpaint`, `requestPaint()`, or `drawElementImage()` directly.
 
-## Packages
-
-- `@synthesisengineering/prism` - Prism alpha package, centered on the HTML-in-Canvas runtime
-
 ## Installation
-
-Prism is not published to a package registry yet. In this repository, install
-the workspace dependencies and use the local TypeScript aliases.
-
-```sh
-pnpm install
-```
-
-When the package is published, the intended install path is:
 
 ```sh
 pnpm add @synthesisengineering/prism
