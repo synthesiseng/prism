@@ -45,12 +45,13 @@ const labelsRoot = getElement("labels");
 const runtime = new CanvasRuntime(canvas, { backend: "auto" });
 
 const labels = slices.map((slice) => {
-  const element = document.createElement("button");
+  const element = document.createElement("div");
   element.className = "label";
-  element.type = "button";
   element.role = "listitem";
+  element.tabIndex = 0;
   element.innerHTML = `<span class="value">${formatPercent(slice.value)}</span><span>${slice.name}</span>`;
 
+  // Keep the original parent mounted so Prism can restore DOM ownership.
   labelsRoot.appendChild(element);
   element.addEventListener("focus", () => {
     runtime.invalidate();
@@ -59,6 +60,7 @@ const labels = slices.map((slice) => {
     runtime.invalidate();
   });
 
+  // Surface bounds are CSS pixels; Prism reads this mutable state each paint.
   const bounds = { x: 0, y: 0, width: 1, height: 1 };
   const surface = runtime.registerSurface(element, { bounds: () => bounds });
 
@@ -70,8 +72,6 @@ const labels = slices.map((slice) => {
   };
 });
 
-labelsRoot.remove();
-
 runtime.onPaint(({ ctx, drawSurface }) => {
   const width = runtime.width;
   const height = runtime.height;
@@ -80,14 +80,17 @@ runtime.onPaint(({ ctx, drawSurface }) => {
   }
 
   const centerCss = { x: width / 2, y: height / 2 };
+  // Direct canvas drawing uses backing-store pixels, unlike surface bounds.
   const center = runtime.cssPointToCanvasPixels(centerCss);
   const radiusCss = Math.min(width, height) * 0.42;
   const radius = runtime.cssLengthToCanvasPixels(radiusCss);
+  const chartPadding = runtime.cssLengthToCanvasPixels(8);
+  const sliceStrokeWidth = runtime.cssLengthToCanvasPixels(3);
   let angle = -Math.PI / 2;
   let focusedPath: Path2D | undefined;
   let focusedElement: HTMLElement | undefined;
 
-  drawChartBackground(ctx, center.x, center.y, radius);
+  drawChartBackground(ctx, center.x, center.y, radius, chartPadding);
 
   for (const record of labels) {
     const sliceAngle = record.slice.value * Math.PI * 2;
@@ -98,7 +101,8 @@ runtime.onPaint(({ ctx, drawSurface }) => {
       radius,
       angle,
       angle + sliceAngle,
-      record.slice
+      record.slice,
+      sliceStrokeWidth
     );
 
     if (document.activeElement === record.element) {
@@ -112,6 +116,7 @@ runtime.onPaint(({ ctx, drawSurface }) => {
     angle += sliceAngle;
   }
 
+  // Draw the browser focus ring after the HTML surfaces so it stays on top.
   if (focusedPath && focusedElement) {
     ctx.drawFocusIfNeeded(focusedPath, focusedElement);
   }
@@ -123,11 +128,12 @@ function drawChartBackground(
   ctx: CanvasRenderingContext2D,
   x: number,
   y: number,
-  radius: number
+  radius: number,
+  padding: number
 ): void {
   ctx.save();
   ctx.beginPath();
-  ctx.arc(x, y, radius + 8, 0, Math.PI * 2);
+  ctx.arc(x, y, radius + padding, 0, Math.PI * 2);
   ctx.fillStyle = "#f8fafc";
   ctx.fill();
   ctx.restore();
@@ -140,7 +146,8 @@ function drawSlice(
   radius: number,
   start: number,
   end: number,
-  slice: Slice
+  slice: Slice,
+  strokeWidth: number
 ): Path2D {
   const path = new Path2D();
   path.moveTo(x, y);
@@ -154,7 +161,7 @@ function drawSlice(
   ctx.fillStyle = gradient;
   ctx.fill(path);
   ctx.strokeStyle = "#ffffff";
-  ctx.lineWidth = 3;
+  ctx.lineWidth = strokeWidth;
   ctx.stroke(path);
 
   return path;
