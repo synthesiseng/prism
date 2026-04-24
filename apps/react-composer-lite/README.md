@@ -1,6 +1,6 @@
-# Prism Composer Lite
+# Prism React Composer Lite
 
-Prism Composer Lite is a small example app that shows HTML/CSS components used as movable, transformable, exportable canvas surfaces.
+Prism React Composer Lite is a small React example app that shows HTML/CSS components used as movable, transformable, exportable canvas surfaces.
 
 It is intentionally narrow. The app is not a full design tool; it exists to demonstrate how a React application can keep normal document state while Prism owns HTML-in-Canvas registration, paint lifecycle, coordinate conversion, and export readiness.
 
