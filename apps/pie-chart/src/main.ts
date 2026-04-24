@@ -1,4 +1,4 @@
-import { CanvasRuntime, type CanvasSurface } from "@prism/html-canvas";
+import { CanvasRuntime, type CanvasSurface } from "@synthesisengineering/prism";
 
 type Slice = Readonly<{
   name: string;
