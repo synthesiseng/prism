@@ -1,4 +1,6 @@
 import type {
+  ChangelogContent,
+  ChangelogSurfaceModel,
   CodeContent,
   CodeSurfaceModel,
   ComposerSurface,
@@ -6,9 +8,17 @@ import type {
   DocsSurfaceModel,
   HeroContent,
   HeroSurfaceModel,
+  InstallContent,
+  InstallSurfaceModel,
+  QuoteContent,
+  QuoteSurfaceModel,
   StageFormat,
   StageFormatId,
-  TemplateId
+  StatContent,
+  StatSurfaceModel,
+  TemplateId,
+  WordmarkContent,
+  WordmarkSurfaceModel
 } from "./types";
 import { templateRegistry } from "../templates/registry";
 
@@ -57,6 +67,38 @@ export const defaultCodeContent: CodeContent = {
   filename: "prism.config.ts"
 };
 
+export const defaultStatContent: StatContent = {
+  value: "paintOnce()",
+  label: "Export path",
+  sub: "fonts → paint → blob"
+};
+
+export const defaultQuoteContent: QuoteContent = {
+  quote: "DOM-quality layout, canvas-native composition.",
+  author: "Runtime note",
+  role: "Prism library"
+};
+
+export const defaultChangelogContent: ChangelogContent = {
+  version: "v0.1",
+  date: "Alpha",
+  items: [
+    { tag: "new", text: "Canvas runtime" },
+    { tag: "new", text: "Surface lifecycle" },
+    { tag: "fix", text: "Paint readiness" }
+  ]
+};
+
+export const defaultWordmarkContent: WordmarkContent = {
+  tag: "by Synthesis"
+};
+
+export const defaultInstallContent: InstallContent = {
+  badge: "v0.1",
+  title: "Ship in one line.",
+  command: "npm i @synthesisengineering/prism"
+};
+
 export function createSurface(
   templateId: TemplateId,
   options: Partial<ComposerSurface["transform"]> &
@@ -71,10 +113,10 @@ export function createSurface(
     rotation: options.rotation ?? 0
   };
   const appearance = {
-    theme: templateId === "docs" ? "light" : "dark",
+    theme: ["docs", "quote", "install"].includes(templateId) ? "light" : "dark",
     accent: "#7B61FF",
     padding: 24,
-    radius: templateId === "code" ? 12 : 14,
+    radius: templateId === "code" ? 12 : templateId === "wordmark" ? 999 : 14,
     shadow: "soft"
   } as const;
   const enterDelay = options.enterDelay ?? 0;
@@ -108,34 +150,111 @@ export function createSurface(
         appearance: { ...appearance, shadow: "deep" },
         enterDelay
       } satisfies CodeSurfaceModel;
+    case "stat":
+      return {
+        id,
+        template: "stat",
+        transform,
+        content: { ...defaultStatContent },
+        appearance: { ...appearance, shadow: "deep" },
+        enterDelay
+      } satisfies StatSurfaceModel;
+    case "quote":
+      return {
+        id,
+        template: "quote",
+        transform,
+        content: { ...defaultQuoteContent },
+        appearance: { ...appearance, theme: "light", shadow: "deep" },
+        enterDelay
+      } satisfies QuoteSurfaceModel;
+    case "changelog":
+      return {
+        id,
+        template: "changelog",
+        transform,
+        content: { ...defaultChangelogContent },
+        appearance: { ...appearance, shadow: "deep" },
+        enterDelay
+      } satisfies ChangelogSurfaceModel;
+    case "wordmark":
+      return {
+        id,
+        template: "wordmark",
+        transform,
+        content: { ...defaultWordmarkContent },
+        appearance: { ...appearance, padding: 16, shadow: "soft" },
+        enterDelay
+      } satisfies WordmarkSurfaceModel;
+    case "install":
+      return {
+        id,
+        template: "install",
+        transform,
+        content: { ...defaultInstallContent },
+        appearance: { ...appearance, theme: "light", shadow: "deep" },
+        enterDelay
+      } satisfies InstallSurfaceModel;
   }
 }
 
 export function defaultComposition(): ComposerSurface[] {
   return [
-    createSurface("hero", {
-      x: 60,
-      y: 145,
-      width: 640,
-      height: 340,
+    createSurface("wordmark", {
+      x: 48,
+      y: 40,
+      width: 180,
+      height: 60,
       rotation: -2,
       enterDelay: 0
     }),
-    createSurface("docs", {
-      x: 760,
-      y: 50,
-      width: 280,
-      height: 330,
-      rotation: 3,
-      enterDelay: 150
+    createSurface("hero", {
+      x: 30,
+      y: 130,
+      width: 620,
+      height: 400,
+      rotation: -4,
+      enterDelay: 60
+    }),
+    createSurface("stat", {
+      x: 580,
+      y: 440,
+      width: 230,
+      height: 150,
+      rotation: 5,
+      enterDelay: 120
+    }),
+    createSurface("changelog", {
+      x: 960,
+      y: 400,
+      width: 220,
+      height: 200,
+      rotation: 4,
+      enterDelay: 180
     }),
     createSurface("code", {
-      x: 720,
-      y: 340,
-      width: 430,
-      height: 250,
-      rotation: -1.5,
+      x: 640,
+      y: 60,
+      width: 480,
+      height: 290,
+      rotation: 6,
+      enterDelay: 240
+    }),
+    createSurface("quote", {
+      x: 820,
+      y: 280,
+      width: 310,
+      height: 180,
+      rotation: -3,
       enterDelay: 300
+    }),
+    createSurface("install", {
+      x: 280,
+      y: 470,
+      width: 310,
+      height: 150,
+      rotation: -2,
+      enterDelay: 360
     })
   ];
 }

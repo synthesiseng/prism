@@ -1,6 +1,14 @@
 export type StageFormatId = "og" | "square" | "portrait" | "story";
 
-export type TemplateId = "hero" | "docs" | "code";
+export type TemplateId =
+  | "hero"
+  | "docs"
+  | "code"
+  | "stat"
+  | "quote"
+  | "changelog"
+  | "install"
+  | "wordmark";
 
 export type StageFormat = Readonly<{
   id: StageFormatId;
@@ -49,6 +57,39 @@ export type CodeContent = Readonly<{
   filename: string;
 }>;
 
+export type StatContent = Readonly<{
+  value: string;
+  label: string;
+  sub: string;
+}>;
+
+export type QuoteContent = Readonly<{
+  quote: string;
+  author: string;
+  role: string;
+}>;
+
+export type ChangelogItem = Readonly<{
+  tag: "new" | "fix" | "imp";
+  text: string;
+}>;
+
+export type ChangelogContent = Readonly<{
+  version: string;
+  date: string;
+  items: readonly ChangelogItem[];
+}>;
+
+export type WordmarkContent = Readonly<{
+  tag: string;
+}>;
+
+export type InstallContent = Readonly<{
+  badge: string;
+  title: string;
+  command: string;
+}>;
+
 type ComposerSurfaceBase<TTemplate extends TemplateId, TContent> = Readonly<{
   id: string;
   template: TTemplate;
@@ -61,8 +102,21 @@ type ComposerSurfaceBase<TTemplate extends TemplateId, TContent> = Readonly<{
 export type HeroSurfaceModel = ComposerSurfaceBase<"hero", HeroContent>;
 export type DocsSurfaceModel = ComposerSurfaceBase<"docs", DocsContent>;
 export type CodeSurfaceModel = ComposerSurfaceBase<"code", CodeContent>;
+export type StatSurfaceModel = ComposerSurfaceBase<"stat", StatContent>;
+export type QuoteSurfaceModel = ComposerSurfaceBase<"quote", QuoteContent>;
+export type ChangelogSurfaceModel = ComposerSurfaceBase<"changelog", ChangelogContent>;
+export type InstallSurfaceModel = ComposerSurfaceBase<"install", InstallContent>;
+export type WordmarkSurfaceModel = ComposerSurfaceBase<"wordmark", WordmarkContent>;
 
-export type ComposerSurface = HeroSurfaceModel | DocsSurfaceModel | CodeSurfaceModel;
+export type ComposerSurface =
+  | HeroSurfaceModel
+  | DocsSurfaceModel
+  | CodeSurfaceModel
+  | StatSurfaceModel
+  | QuoteSurfaceModel
+  | ChangelogSurfaceModel
+  | InstallSurfaceModel
+  | WordmarkSurfaceModel;
 
 export type GhostSurface = Readonly<{
   x: number;

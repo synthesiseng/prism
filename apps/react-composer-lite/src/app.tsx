@@ -32,11 +32,18 @@ const sideChromeWidth = 620;
 const stageBackground = "#0c0c0c";
 
 export function App() {
+  const [initialDocument] = useState(() => {
+    const initialSurfaces = defaultComposition();
+    return {
+      selectedId: initialSurfaces.at(-1)?.id ?? null,
+      surfaces: initialSurfaces
+    };
+  });
   const [canvas, setCanvas] = useState<HTMLCanvasElement | null>(null);
   const runtime = usePrismRuntime(canvas);
   const [format, setFormat] = useState<StageFormat>(stageFormats.og);
-  const [surfaces, setSurfaces] = useState<ComposerSurface[]>(() => defaultComposition());
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [surfaces, setSurfaces] = useState<ComposerSurface[]>(initialDocument.surfaces);
+  const [selectedId, setSelectedId] = useState<string | null>(initialDocument.selectedId);
   const [ghost, setGhost] = useState<GhostSurface | null>(null);
   const [rotating, setRotating] = useState(false);
   const [rotationPreview, setRotationPreview] = useState<number | null>(null);
@@ -115,8 +122,11 @@ export function App() {
         (event.key === "Delete" || event.key === "Backspace") &&
         !["INPUT", "TEXTAREA"].includes(activeTag)
       ) {
-        setSurfaces((current) => current.filter((surface) => surface.id !== selectedId));
-        setSelectedId(null);
+        setSurfaces((current) => {
+          const next = current.filter((surface) => surface.id !== selectedId);
+          setSelectedId(next.at(-1)?.id ?? null);
+          return next;
+        });
       }
     };
 
@@ -135,6 +145,8 @@ export function App() {
   const hasNativeSupport = runtime?.backendKind === "native";
 
   const selectedSurface = surfaces.find((surface) => surface.id === selectedId) ?? null;
+  const inspectedSurface = selectedSurface ?? surfaces.at(-1) ?? null;
+  const inspectedId = selectedId ?? inspectedSurface?.id ?? null;
 
   const replaceSurface = useCallback((nextSurface: ComposerSurface): void => {
     setSurfaces((current) =>
@@ -460,13 +472,13 @@ export function App() {
 
         <RightPanel
           bringForward={() => {
-            setSurfaces((current) => moveLayer(current, selectedId, "forward"));
+            setSurfaces((current) => moveLayer(current, inspectedId, "forward"));
           }}
-          selectedId={selectedId}
+          selectedId={inspectedId}
           sendBackward={() => {
-            setSurfaces((current) => moveLayer(current, selectedId, "backward"));
+            setSurfaces((current) => moveLayer(current, inspectedId, "backward"));
           }}
-          surface={selectedSurface}
+          surface={inspectedSurface}
           onSurfaceChange={replaceSurface}
         />
       </div>
