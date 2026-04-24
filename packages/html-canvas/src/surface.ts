@@ -54,6 +54,11 @@ export class CanvasSurface {
   /**
    * Creates a surface wrapper for an element.
    *
+   * @remarks
+   * Applications should not construct surfaces directly. Use
+   * `CanvasRuntime.registerSurface()` so the runtime can attach lifecycle,
+   * invalidation, and DOM restoration behavior.
+   *
    * @param element - HTML element represented by the surface.
    * @param options - Surface configuration.
    */
