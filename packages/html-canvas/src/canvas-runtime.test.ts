@@ -17,13 +17,27 @@ class FakeDomMatrix {
 }
 
 class FakeResizeObserver {
-  constructor(private readonly callback: ResizeObserverCallback) {}
+  static readonly instances: FakeResizeObserver[] = [];
 
-  observe(): void {
-    void this.callback;
+  static reset(): void {
+    FakeResizeObserver.instances.length = 0;
   }
 
-  disconnect(): void {}
+  disconnected = false;
+
+  constructor(private readonly callback: ResizeObserverCallback) {
+    FakeResizeObserver.instances.push(this);
+  }
+
+  observe(): void {}
+
+  disconnect(): void {
+    this.disconnected = true;
+  }
+
+  trigger(entry: Partial<ResizeObserverEntry>): void {
+    this.callback([entry as ResizeObserverEntry], this as unknown as ResizeObserver);
+  }
 }
 
 class FakeStyle {
@@ -238,11 +252,26 @@ type RuntimeInternals = {
   flushPaint(): void;
 };
 
+function currentResizeObserver(): FakeResizeObserver {
+  const observer = FakeResizeObserver.instances.at(-1);
+  if (!observer) {
+    throw new Error("Expected CanvasRuntime to create a ResizeObserver.");
+  }
+  return observer;
+}
+
+function resizeEntry(width: number, height: number): Partial<ResizeObserverEntry> {
+  return {
+    contentRect: { width, height } as DOMRectReadOnly
+  };
+}
+
 describe("CanvasRuntime", () => {
   let document: FakeDocument;
 
   beforeEach(() => {
     document = new FakeDocument();
+    FakeResizeObserver.reset();
     vi.stubGlobal("devicePixelRatio", 2);
     vi.stubGlobal("ResizeObserver", FakeResizeObserver);
     vi.stubGlobal("DOMMatrix", FakeDomMatrix);
@@ -462,6 +491,124 @@ describe("CanvasRuntime", () => {
       expect(element.style.width).toBe("30px");
       expect(element.style.height).toBe("40px");
       expect(element.style.transform).toBe("matrix(1, 0, 0, 1, 12, 18)");
+
+      runtime.destroy();
+    });
+  });
+
+  describe("resize and DPR", () => {
+    it("updates runtime dimensions and backing store when display metrics change", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      canvas.clientWidth = 320;
+      canvas.clientHeight = 180;
+
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+      expect(runtime.width).toBe(320);
+      expect(runtime.height).toBe(180);
+      expect(runtime.pixelRatio).toBe(2);
+      expect(canvas.width).toBe(640);
+      expect(canvas.height).toBe(360);
+
+      vi.stubGlobal("devicePixelRatio", 3);
+      canvas.clientWidth = 400;
+      canvas.clientHeight = 250;
+      currentResizeObserver().trigger(resizeEntry(400, 250));
+
+      expect(runtime.width).toBe(400);
+      expect(runtime.height).toBe(250);
+      expect(runtime.pixelRatio).toBe(3);
+      expect(canvas.width).toBe(1200);
+      expect(canvas.height).toBe(750);
+      expect(runtime.cssLengthToCanvasPixels(10)).toBe(30);
+      expect(runtime.cssPointToCanvasPixels({ x: 12, y: 8 })).toEqual({
+        x: 36,
+        y: 24
+      });
+
+      runtime.destroy();
+    });
+
+    it("keeps client coordinate conversion in CSS space after resize and DPR changes", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      canvas.clientWidth = 300;
+      canvas.clientHeight = 150;
+
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+      expect(runtime.clientToCanvasPoint(210, 170)).toEqual({ x: 200, y: 150 });
+
+      vi.stubGlobal("devicePixelRatio", 4);
+      canvas.clientWidth = 600;
+      canvas.clientHeight = 300;
+      currentResizeObserver().trigger(resizeEntry(600, 300));
+
+      expect(runtime.width).toBe(600);
+      expect(runtime.height).toBe(300);
+      expect(runtime.pixelRatio).toBe(4);
+      expect(runtime.clientToCanvasPoint(210, 170)).toEqual({ x: 200, y: 150 });
+
+      runtime.destroy();
+    });
+
+    it("keeps surface alignment in backing-store pixels after resize and DPR changes", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const element = document.createElement("section");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 10, y: 15, width: 20, height: 25 }
+      });
+
+      runtime.onPaint(({ drawSurface }) => {
+        drawSurface(surface);
+      });
+
+      (runtime as unknown as RuntimeInternals).flushPaint();
+
+      expect(canvas.context.drawImageCalls.at(-1)).toEqual({
+        x: 20,
+        y: 30,
+        width: 40,
+        height: 50
+      });
+
+      vi.stubGlobal("devicePixelRatio", 3);
+      canvas.clientWidth = 600;
+      canvas.clientHeight = 300;
+      currentResizeObserver().trigger(resizeEntry(600, 300));
+      (runtime as unknown as RuntimeInternals).flushPaint();
+
+      expect(canvas.context.drawImageCalls.at(-1)).toEqual({
+        x: 30,
+        y: 45,
+        width: 60,
+        height: 75
+      });
+      expect(element.style.width).toBe("20px");
+      expect(element.style.height).toBe("25px");
+      expect(element.style.transform).toBe("matrix(1, 0, 0, 1, 10, 15)");
+
+      runtime.destroy();
+    });
+
+    it("requests native paint when resize updates native runtime metrics", () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+      canvas.requestPaintCount = 0;
+      canvas.clientWidth = 500;
+      canvas.clientHeight = 240;
+      currentResizeObserver().trigger(resizeEntry(500, 240));
+
+      expect(runtime.width).toBe(500);
+      expect(runtime.height).toBe(240);
+      expect(canvas.width).toBe(1000);
+      expect(canvas.height).toBe(480);
+      expect(canvas.requestPaintCount).toBe(1);
 
       runtime.destroy();
     });
