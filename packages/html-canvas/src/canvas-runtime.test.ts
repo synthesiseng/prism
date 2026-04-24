@@ -124,6 +124,12 @@ class FakeElement {
 
 class FakeCanvasContext {
   drawImageCount = 0;
+  readonly drawImageCalls: Array<{
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  }> = [];
   clearCount = 0;
   drawElementImage?: () => DOMMatrix;
 
@@ -145,8 +151,15 @@ class FakeCanvasContext {
     this.clearCount += 1;
   }
 
-  drawImage(): void {
+  drawImage(
+    _source: unknown,
+    x = 0,
+    y = 0,
+    width = 0,
+    height = 0
+  ): void {
     this.drawImageCount += 1;
+    this.drawImageCalls.push({ x, y, width, height });
   }
 
   fillRect(): void {}
@@ -264,6 +277,169 @@ describe("CanvasRuntime", () => {
     expect(element.style.pointerEvents).toBe("auto");
     expect(element.inert).toBe(false);
     expect(canvas.context.drawImageCount).toBe(1);
+
+    runtime.destroy();
+  });
+
+  it("updates surface bounds through the surface API", () => {
+    const canvas = new FakeCanvas(false);
+    canvas.ownerDocument = document;
+    const element = document.createElement("section");
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+      bounds: { x: 20, y: 30, width: 100, height: 50 }
+    });
+
+    runtime.onPaint(({ drawSurface }) => {
+      drawSurface(surface);
+    });
+
+    surface.setBounds({ x: 40, y: 45, width: 120, height: 60 });
+    (runtime as unknown as RuntimeInternals).flushPaint();
+
+    expect(surface.getBounds()).toEqual({
+      x: 40,
+      y: 45,
+      width: 120,
+      height: 60
+    });
+    expect(element.style.width).toBe("120px");
+    expect(element.style.height).toBe("60px");
+    expect(element.style.transform).toBe("matrix(1, 0, 0, 1, 40, 45)");
+
+    runtime.destroy();
+  });
+
+  it("returns the existing surface when the same element is registered again", () => {
+    const canvas = new FakeCanvas(false);
+    canvas.ownerDocument = document;
+    const element = document.createElement("section");
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+      bounds: { x: 1, y: 2, width: 30, height: 40 }
+    });
+
+    const sameSurface = runtime.registerSurface(element as unknown as HTMLElement, {
+      bounds: { x: 10, y: 20, width: 300, height: 400 }
+    });
+
+    expect(sameSurface).toBe(surface);
+    expect(surface.getBounds()).toEqual({
+      x: 1,
+      y: 2,
+      width: 30,
+      height: 40
+    });
+
+    surface.setBounds({ x: 10, y: 20, width: 300, height: 400 });
+
+    expect(surface.getBounds()).toEqual({
+      x: 10,
+      y: 20,
+      width: 300,
+      height: 400
+    });
+
+    runtime.destroy();
+  });
+
+  it("requests native paint when bounds update outside paint", () => {
+    const canvas = new FakeCanvas(true);
+    canvas.ownerDocument = document;
+    const element = document.createElement("section");
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+      bounds: { x: 0, y: 0, width: 10, height: 10 }
+    });
+
+    canvas.requestPaintCount = 0;
+    surface.setBounds({ x: 10, y: 20, width: 30, height: 40 });
+
+    expect(canvas.requestPaintCount).toBe(1);
+
+    runtime.destroy();
+  });
+
+  it("paints multiple surfaces after bounds updates", () => {
+    const canvas = new FakeCanvas(false);
+    canvas.ownerDocument = document;
+    const firstElement = document.createElement("section");
+    const secondElement = document.createElement("aside");
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+    const firstSurface = runtime.registerSurface(firstElement as unknown as HTMLElement, {
+      bounds: { x: 0, y: 0, width: 10, height: 10 }
+    });
+    const secondSurface = runtime.registerSurface(secondElement as unknown as HTMLElement, {
+      bounds: { x: 20, y: 20, width: 20, height: 20 }
+    });
+
+    runtime.onPaint(({ drawSurface }) => {
+      drawSurface(firstSurface);
+      drawSurface(secondSurface);
+    });
+
+    firstSurface.setBounds({ x: 5, y: 6, width: 30, height: 40 });
+    secondSurface.setBounds({ x: 50, y: 60, width: 70, height: 80 });
+    (runtime as unknown as RuntimeInternals).flushPaint();
+
+    expect(canvas.context.drawImageCount).toBe(2);
+    expect(firstElement.style.width).toBe("30px");
+    expect(firstElement.style.height).toBe("40px");
+    expect(firstElement.style.transform).toBe("matrix(1, 0, 0, 1, 5, 6)");
+    expect(secondElement.style.width).toBe("70px");
+    expect(secondElement.style.height).toBe("80px");
+    expect(secondElement.style.transform).toBe("matrix(1, 0, 0, 1, 50, 60)");
+
+    runtime.destroy();
+  });
+
+  it("keeps setBounds in CSS pixels while drawing in backing-store pixels", () => {
+    const canvas = new FakeCanvas(false);
+    canvas.ownerDocument = document;
+    const element = document.createElement("section");
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+      bounds: { x: 0, y: 0, width: 10, height: 10 }
+    });
+
+    runtime.onPaint(({ drawSurface }) => {
+      drawSurface(surface);
+    });
+
+    surface.setBounds({ x: 10, y: 15, width: 25, height: 30 });
+    (runtime as unknown as RuntimeInternals).flushPaint();
+
+    expect(element.style.width).toBe("25px");
+    expect(element.style.height).toBe("30px");
+    expect(element.style.transform).toBe("matrix(1, 0, 0, 1, 10, 15)");
+    expect(canvas.context.drawImageCalls).toEqual([
+      { x: 20, y: 30, width: 50, height: 60 }
+    ]);
+
+    runtime.destroy();
+  });
+
+  it("does not request a redundant native paint when bounds update during paint", () => {
+    const canvas = new FakeCanvas(true);
+    canvas.ownerDocument = document;
+    const element = document.createElement("section");
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+      bounds: { x: 0, y: 0, width: 10, height: 10 }
+    });
+
+    runtime.onPaint(({ drawSurface }) => {
+      surface.setBounds({ x: 10, y: 20, width: 30, height: 40 });
+      drawSurface(surface);
+    });
+
+    canvas.requestPaintCount = 0;
+    canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+
+    expect(canvas.requestPaintCount).toBe(0);
+    expect(element.style.width).toBe("30px");
+    expect(element.style.height).toBe("40px");
+    expect(element.style.transform).toBe("matrix(1, 0, 0, 1, 12, 18)");
 
     runtime.destroy();
   });

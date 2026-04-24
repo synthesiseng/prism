@@ -150,7 +150,11 @@ export class CanvasRuntime {
     if (this.backend.kind === "native") {
       this.canvas.setAttribute("layoutsubtree", "");
     }
-    this.surfaces = new SurfaceRegistry(canvas, () => this.invalidate());
+    this.surfaces = new SurfaceRegistry(
+      canvas,
+      () => this.invalidate(),
+      () => this.invalidateSurfaceBounds()
+    );
     this.loop = new FrameLoop();
     this.loop.addSystem({
       update: (time) => {
@@ -230,8 +234,12 @@ export class CanvasRuntime {
    * it. Surface bounds are expressed in CSS pixels. Dispose or unregister the
    * returned surface to restore ownership.
    *
+   * Registering the same element with the same runtime more than once returns
+   * the existing surface. New options are not applied; use
+   * `CanvasSurface.setBounds()` to move or resize an existing surface.
+   *
    * @param element - HTML element represented by the surface.
-   * @param options - Surface bounds and accessibility options.
+   * @param options - Initial surface bounds and accessibility options.
    * @returns The registered runtime surface.
    *
    * @throws Error when called after the runtime is destroyed.
@@ -471,6 +479,14 @@ export class CanvasRuntime {
 
     this.nativePaintRequestedForWaiters = true;
     this.backend.requestPaint(this.canvas);
+  }
+
+  private invalidateSurfaceBounds(): void {
+    if (this.isPainting) {
+      return;
+    }
+
+    this.invalidate();
   }
 
   private scheduleFallbackPaint(): void {
