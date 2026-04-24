@@ -33,6 +33,12 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9
 
+  apps/pie-chart:
+    dependencies:
+      '@prism/html-canvas':
+        specifier: workspace:*
+        version: link:../../packages/html-canvas
+
   packages/assets: {}
 
   packages/core:

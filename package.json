@@ -1,5 +1,5 @@
 {
-  "name": "@synsoftworks/prism",
+  "name": "@synthesisengineering/prism",
   "version": "0.1.0-alpha.1",
   "description": "Native-first HTML-in-Canvas runtime for treating HTML/CSS as runtime-managed canvas surfaces.",
   "license": "MIT",
@@ -21,13 +21,13 @@
     "LICENSE"
   ],
   "sideEffects": false,
-  "homepage": "https://github.com/synsoftworks/prism#readme",
+  "homepage": "https://github.com/synthesiseng/prism#readme",
   "bugs": {
-    "url": "https://github.com/synsoftworks/prism/issues"
+    "url": "https://github.com/synthesiseng/prism/issues"
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/synsoftworks/prism.git"
+    "url": "git+https://github.com/synthesiseng/prism.git"
   },
   "keywords": [
     "canvas",
