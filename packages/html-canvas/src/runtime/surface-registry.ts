@@ -4,6 +4,7 @@ import { deactivateSurface } from "./surface-activation";
 type SurfaceDomState = Readonly<{
   parent: Node | null;
   nextSibling: Node | null;
+  placeholder: ChildNode | null;
   style: string | null;
   ariaLabel: string | null;
   prismSurface: string | null;
@@ -99,9 +100,19 @@ export class SurfaceRegistry {
 
 function snapshotSurfaceDomState(element: HTMLElement): SurfaceDomState {
   const inertElement = element as HTMLElement & { inert?: boolean };
+  const parent = element.parentNode;
+  const nextSibling = element.nextSibling;
+  const placeholder = parent
+    ? element.ownerDocument.createComment("prism-surface")
+    : null;
+  if (parent && placeholder) {
+    parent.insertBefore(placeholder, element);
+  }
+
   return {
-    parent: element.parentNode,
-    nextSibling: element.nextSibling,
+    parent,
+    nextSibling,
+    placeholder,
     style: element.getAttribute("style"),
     ariaLabel: element.getAttribute("aria-label"),
     prismSurface: element.getAttribute("data-prism-surface"),
@@ -125,10 +136,13 @@ function restoreSurfaceDomState(element: HTMLElement, state: SurfaceDomState): v
   }
 
   if (state.parent) {
-    state.parent.insertBefore(
-      element,
-      state.nextSibling?.parentNode === state.parent ? state.nextSibling : null
-    );
+    const restoreBefore = state.placeholder?.parentNode === state.parent
+      ? state.placeholder
+      : state.nextSibling?.parentNode === state.parent
+        ? state.nextSibling
+        : null;
+    state.parent.insertBefore(element, restoreBefore);
+    state.placeholder?.remove();
   } else {
     element.remove();
   }
