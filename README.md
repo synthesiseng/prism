@@ -6,7 +6,7 @@ It manages HTML surface registration, paint lifecycle, sizing, transform sync, i
 
 ## Packages
 
-- `@synsoftworks/prism` - Prism alpha package, centered on the HTML-in-Canvas runtime
+- `@synthesisengineering/prism` - Prism alpha package, centered on the HTML-in-Canvas runtime
 
 ## Installation
 
@@ -20,13 +20,13 @@ pnpm install
 When the package is published, the intended install path is:
 
 ```sh
-pnpm add @synsoftworks/prism
+pnpm add @synthesisengineering/prism
 ```
 
 ## Quickstart
 
 ```ts
-import { CanvasRuntime } from "@synsoftworks/prism";
+import { CanvasRuntime } from "@synthesisengineering/prism";
 
 const runtime = new CanvasRuntime(canvas, { backend: "auto" });
 
@@ -196,4 +196,4 @@ capability goes to the proposal authors and the WICG.
 
 ## License
 
-MIT © [Synthesis Softworks](https://github.com/synthesis-softworks)
+MIT © [Synthesis](https://synthesis.engineering)

@@ -1,0 +1,34 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prism Pie Chart Example</title>
+    <link rel="stylesheet" href="/src/styles.css" />
+  </head>
+  <body>
+    <main class="page">
+      <section class="example" aria-labelledby="title">
+        <div class="header">
+          <p class="eyebrow">Prism example</p>
+          <h1 id="title">Pie chart with HTML labels</h1>
+          <p class="summary">
+            Canvas draws the chart. Prism registers the labels as real HTML
+            surfaces and paints them into the same runtime pass.
+          </p>
+        </div>
+
+        <canvas
+          id="chart"
+          class="chart"
+          role="list"
+          aria-label="Fruit share pie chart"
+        ></canvas>
+
+        <div id="labels" class="labels" aria-hidden="true"></div>
+      </section>
+    </main>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
