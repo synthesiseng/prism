@@ -12,18 +12,34 @@ import {
 } from "./hidpi";
 import type { CanvasSurface, SurfaceOptions } from "./surface";
 import {
-  selectRuntimeBackend,
-  type RuntimeBackendKind,
-  type RuntimeBackendPreference
+  selectRuntimeBackend
 } from "./runtime/backend-selection";
 import {
   clientToCanvasPoint as toCanvasPoint,
   cssLengthToCanvasPixels as toCanvasPixelLength,
-  cssPointToCanvasPixels as toCanvasPixelPoint,
-  type CanvasPoint
+  cssPointToCanvasPixels as toCanvasPixelPoint
 } from "./runtime/coordinates";
-import { flushPaintPass, type PaintHandler } from "./runtime/paint-pass";
+import { flushPaintPass } from "./runtime/paint-pass";
 import { SurfaceRegistry } from "./runtime/surface-registry";
+
+/**
+ * A point in the runtime's public coordinate space.
+ *
+ * @remarks
+ * Public runtime coordinates use CSS pixels. Use the CSS-to-canvas helpers when
+ * you need backing-store pixels for direct canvas drawing.
+ */
+export type CanvasPoint = Readonly<{
+  /**
+   * X coordinate.
+   */
+  x: number;
+
+  /**
+   * Y coordinate.
+   */
+  y: number;
+}>;
 
 /**
  * Handles runtime state updates before a paint pass.
@@ -32,12 +48,41 @@ import { SurfaceRegistry } from "./runtime/surface-registry";
  */
 export type UpdateHandler = (time: FrameTime) => void;
 
-export type { CanvasPoint, PaintHandler };
+/**
+ * Handles a runtime-owned paint pass.
+ *
+ * @remarks
+ * Direct drawing with `ctx` uses canvas backing-store pixels. Registered HTML
+ * surfaces use CSS-pixel bounds and must be drawn with `drawSurface()`.
+ *
+ * @param api - Paint context and surface drawing controls.
+ */
+export type PaintHandler = (api: {
+  /**
+   * Canvas 2D context for direct drawing in backing-store pixels.
+   */
+  ctx: CanvasRenderingContext2D;
+
+  /**
+   * Timing data for the current frame.
+   */
+  time: FrameTime;
+
+  /**
+   * Draws a registered surface immediately at its current CSS-pixel bounds.
+   */
+  drawSurface: (surface: CanvasSurface) => void;
+
+  /**
+   * Requests another runtime-owned paint pass.
+   */
+  invalidate: () => void;
+}) => void;
 
 /**
  * Identifies the backend selected by the runtime.
  */
-export type CanvasBackendKind = RuntimeBackendKind;
+export type CanvasBackendKind = "native" | "fallback";
 
 /**
  * Selects how the runtime chooses its backend.
@@ -46,7 +91,7 @@ export type CanvasBackendKind = RuntimeBackendKind;
  * `"auto"` prefers native HTML-in-Canvas and falls back to the compatibility
  * backend when native browser support is unavailable.
  */
-export type CanvasBackendPreference = RuntimeBackendPreference;
+export type CanvasBackendPreference = "auto" | CanvasBackendKind;
 
 /**
  * Configures a Prism canvas runtime.
@@ -101,12 +146,8 @@ export class CanvasRuntime {
    */
   readonly canvas: HTMLCanvasElement;
 
-  /**
-   * The 2D context used for runtime painting.
-   */
-  readonly ctx: HtmlCanvasContext2D;
-
   private readonly backend: RuntimeBackend;
+  private readonly ctx: HtmlCanvasContext2D;
   private readonly loop: FrameLoop;
   private readonly surfaces: SurfaceRegistry;
   private readonly updateHandlers: UpdateHandler[] = [];
