@@ -6,13 +6,12 @@ It manages HTML surface registration, paint lifecycle, sizing, transform sync, i
 
 ## Packages
 
-- `@prism/html-canvas` - core Prism v1 runtime
+- `@synsoftworks/prism` - Prism alpha package, centered on the HTML-in-Canvas runtime
 
 ## Installation
 
 Prism is not published to a package registry yet. In this repository, install
-the workspace dependencies and import `@prism/html-canvas` through the workspace
-TypeScript aliases.
+the workspace dependencies and use the local TypeScript aliases.
 
 ```sh
 pnpm install
@@ -21,13 +20,13 @@ pnpm install
 When the package is published, the intended install path is:
 
 ```sh
-pnpm add @prism/html-canvas
+pnpm add @synsoftworks/prism
 ```
 
 ## Quickstart
 
 ```ts
-import { CanvasRuntime } from "@prism/html-canvas";
+import { CanvasRuntime } from "@synsoftworks/prism";
 
 const runtime = new CanvasRuntime(canvas, { backend: "auto" });
 
