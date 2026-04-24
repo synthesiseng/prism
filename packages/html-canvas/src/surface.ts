@@ -5,8 +5,8 @@ import { Rect, type RectLike } from "@prism/math";
  *
  * @remarks
  * This is the public coordinate space for surfaces. Prism converts these bounds
- * to canvas backing-store pixels when drawing. A function can be used when
- * bounds are driven by mutable application state.
+ * to canvas backing-store pixels when drawing. Use `CanvasSurface.setBounds()`
+ * when application state moves or resizes a surface after registration.
  */
 export type SurfaceBoundsInput = RectLike | (() => RectLike);
 
@@ -15,7 +15,10 @@ export type SurfaceBoundsInput = RectLike | (() => RectLike);
  */
 export type SurfaceOptions = Readonly<{
   /**
-   * Surface bounds in runtime CSS pixels.
+   * Initial surface bounds in runtime CSS pixels.
+   *
+   * @remarks
+   * Use `CanvasSurface.setBounds()` after registration when bounds change.
    */
   bounds: SurfaceBoundsInput;
 
@@ -26,6 +29,7 @@ export type SurfaceOptions = Readonly<{
 }>;
 
 type SurfaceLifecycle = Readonly<{
+  invalidate(): void;
   unregister(surface: CanvasSurface): void;
 }>;
 
@@ -37,14 +41,14 @@ const surfaceLifecycles = new WeakMap<CanvasSurface, SurfaceLifecycle>();
  * @remarks
  * Surfaces are created by `CanvasRuntime.registerSurface()`. Disposing a
  * surface unregisters it from the runtime and restores the element's original
- * DOM ownership.
+ * DOM ownership. Surface bounds are expressed in runtime CSS pixels.
  */
 export class CanvasSurface {
   /**
    * HTML element represented by this surface.
    */
   readonly element: HTMLElement;
-  private readonly getBoundsValue: () => RectLike;
+  private boundsInput: SurfaceBoundsInput;
   private disposed = false;
 
   /**
@@ -55,9 +59,7 @@ export class CanvasSurface {
    */
   constructor(element: HTMLElement, options: SurfaceOptions) {
     this.element = element;
-    const boundsInput = options.bounds;
-    this.getBoundsValue =
-      typeof boundsInput === "function" ? boundsInput : () => boundsInput;
+    this.boundsInput = options.bounds;
 
     if (options.ariaLabel) {
       this.element.setAttribute("aria-label", options.ariaLabel);
@@ -84,8 +86,32 @@ export class CanvasSurface {
       throw new Error("Cannot read bounds from a disposed Prism canvas surface.");
     }
 
-    const bounds = this.getBoundsValue();
+    const bounds = typeof this.boundsInput === "function"
+      ? this.boundsInput()
+      : this.boundsInput;
     return new Rect(bounds.x, bounds.y, bounds.width, bounds.height);
+  }
+
+  /**
+   * Updates the surface bounds in runtime CSS pixels.
+   *
+   * @remarks
+   * Use this when application state moves or resizes a surface after
+   * registration. Prism converts these CSS-pixel bounds to backing-store pixels
+   * during painting. Calling this outside an active paint pass schedules a
+   * runtime repaint.
+   *
+   * @param bounds - New surface bounds in runtime CSS pixels.
+   *
+   * @throws Error when the surface has already been disposed.
+   */
+  setBounds(bounds: RectLike): void {
+    if (this.disposed) {
+      throw new Error("Cannot update bounds on a disposed Prism canvas surface.");
+    }
+
+    this.boundsInput = bounds;
+    surfaceLifecycles.get(this)?.invalidate();
   }
 
   /**

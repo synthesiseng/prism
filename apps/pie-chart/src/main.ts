@@ -11,12 +11,6 @@ type LabelRecord = Readonly<{
   slice: Slice;
   element: HTMLElement;
   surface: CanvasSurface;
-  bounds: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
 }>;
 
 const slices: readonly Slice[] = [
@@ -60,15 +54,14 @@ const labels = slices.map((slice) => {
     runtime.invalidate();
   });
 
-  // Surface bounds are CSS pixels; Prism reads this mutable state each paint.
-  const bounds = { x: 0, y: 0, width: 1, height: 1 };
-  const surface = runtime.registerSurface(element, { bounds: () => bounds });
+  const surface = runtime.registerSurface(element, {
+    bounds: { x: 0, y: 0, width: 1, height: 1 }
+  });
 
   return {
     slice,
     element,
-    surface,
-    bounds
+    surface
   };
 });
 
@@ -176,10 +169,13 @@ function positionLabel(
   const width = Math.max(record.element.offsetWidth, 1);
   const height = Math.max(record.element.offsetHeight, 1);
 
-  record.bounds.width = width;
-  record.bounds.height = height;
-  record.bounds.x = center.x + Math.cos(angle) * radius * 0.6 - width / 2;
-  record.bounds.y = center.y + Math.sin(angle) * radius * 0.6 - height / 2;
+  // Surface bounds are CSS pixels; Prism converts them during drawSurface().
+  record.surface.setBounds({
+    x: center.x + Math.cos(angle) * radius * 0.6 - width / 2,
+    y: center.y + Math.sin(angle) * radius * 0.6 - height / 2,
+    width,
+    height
+  });
 }
 
 function getElement(id: string): HTMLElement {
