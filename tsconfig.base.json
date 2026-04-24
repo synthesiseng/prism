@@ -17,6 +17,7 @@
     "declarationMap": true,
     "sourceMap": true,
     "paths": {
+      "@synthesisengineering/prism": ["./packages/html-canvas/src/index.ts"],
       "@prism/assets": ["./packages/assets/src/index.ts"],
       "@prism/core": ["./packages/core/src/index.ts"],
       "@prism/html-canvas": ["./packages/html-canvas/src/index.ts"],

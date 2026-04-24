@@ -35,9 +35,9 @@ importers:
 
   apps/pie-chart:
     dependencies:
-      '@prism/html-canvas':
+      '@synthesisengineering/prism':
         specifier: workspace:*
-        version: link:../../packages/html-canvas
+        version: link:../..
 
   packages/assets: {}
 
