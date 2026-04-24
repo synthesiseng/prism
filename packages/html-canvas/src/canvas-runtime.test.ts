@@ -60,7 +60,7 @@ class FakeElement {
     }
 
     const index = this.parentNode.children.indexOf(this);
-    return index === -1 ? null : this.parentNode.children[index + 1] ?? null;
+    return index === -1 ? null : (this.parentNode.children[index + 1] ?? null);
   }
 
   appendChild<TElement extends FakeElement>(element: TElement): TElement {
@@ -130,8 +130,21 @@ class FakeCanvasContext {
     width: number;
     height: number;
   }> = [];
+  readonly drawElementImageCalls: Array<{
+    element: FakeElement;
+    x: number;
+    y: number;
+    width: number | undefined;
+    height: number | undefined;
+  }> = [];
   clearCount = 0;
-  drawElementImage?: () => DOMMatrix;
+  drawElementImage?: (
+    element: FakeElement,
+    x: number,
+    y: number,
+    width?: number,
+    height?: number
+  ) => DOMMatrix;
 
   fillStyle = "";
   strokeStyle = "";
@@ -140,8 +153,10 @@ class FakeCanvasContext {
 
   constructor(native = false) {
     if (native) {
-      this.drawElementImage = () =>
-        new FakeDomMatrix().translateSelf(12, 18) as unknown as DOMMatrix;
+      this.drawElementImage = (element, x, y, width, height) => {
+        this.drawElementImageCalls.push({ element, x, y, width, height });
+        return new FakeDomMatrix().translateSelf(12, 18) as unknown as DOMMatrix;
+      };
     }
   }
 
@@ -151,13 +166,7 @@ class FakeCanvasContext {
     this.clearCount += 1;
   }
 
-  drawImage(
-    _source: unknown,
-    x = 0,
-    y = 0,
-    width = 0,
-    height = 0
-  ): void {
+  drawImage(_source: unknown, x = 0, y = 0, width = 0, height = 0): void {
     this.drawImageCount += 1;
     this.drawImageCalls.push({ x, y, width, height });
   }
@@ -166,7 +175,6 @@ class FakeCanvasContext {
   strokeRect(): void {}
   fillText(): void {}
   scale(): void {}
-
 }
 
 class FakeCanvas extends FakeElement {
@@ -207,7 +215,6 @@ class FakeCanvas extends FakeElement {
       toJSON: () => ({})
     };
   }
-
 }
 
 class FakeDocument {
@@ -216,6 +223,12 @@ class FakeDocument {
       tagName.toLowerCase() === "canvas"
         ? new FakeCanvas(false)
         : new FakeElement(tagName.toUpperCase());
+    element.ownerDocument = this;
+    return element;
+  }
+
+  createComment(): FakeElement {
+    const element = new FakeElement("#comment");
     element.ownerDocument = this;
     return element;
   }
@@ -239,564 +252,991 @@ describe("CanvasRuntime", () => {
     vi.unstubAllGlobals();
   });
 
-  it("prefers the native HTML-in-Canvas backend when available", () => {
-    const canvas = new FakeCanvas(true);
-    canvas.ownerDocument = document;
+  describe("backend selection", () => {
+    it("prefers the native HTML-in-Canvas backend when available", () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
 
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
 
-    expect(runtime.backendKind).toBe("native");
-    expect(canvas.getAttribute("layoutsubtree")).toBe("");
+      expect(runtime.backendKind).toBe("native");
+      expect(canvas.getAttribute("layoutsubtree")).toBe("");
 
-    canvas.requestPaintCount = 0;
-    runtime.invalidate();
+      canvas.requestPaintCount = 0;
+      runtime.invalidate();
 
-    expect(canvas.requestPaintCount).toBe(1);
-    runtime.destroy();
+      expect(canvas.requestPaintCount).toBe(1);
+      runtime.destroy();
+    });
   });
 
-  it("draws surfaces in runtime-owned CSS coordinates and activates only drawn surfaces", () => {
-    const canvas = new FakeCanvas(false);
-    canvas.ownerDocument = document;
-    const element = document.createElement("section");
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
-      bounds: { x: 20, y: 30, width: 100, height: 50 }
-    });
+  describe("surface bounds", () => {
+    it("draws surfaces in runtime-owned CSS coordinates and activates only drawn surfaces", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const element = document.createElement("section");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 20, y: 30, width: 100, height: 50 }
+      });
+
+      expect(runtime.backendKind).toBe("fallback");
+
+      runtime.onPaint(({ drawSurface }) => {
+        drawSurface(surface);
+      });
 
-    expect(runtime.backendKind).toBe("fallback");
-
-    runtime.onPaint(({ drawSurface }) => {
-      drawSurface(surface);
-    });
-
-    (runtime as unknown as RuntimeInternals).flushPaint();
-
-    expect(element.style.width).toBe("100px");
-    expect(element.style.height).toBe("50px");
-    expect(element.style.pointerEvents).toBe("auto");
-    expect(element.inert).toBe(false);
-    expect(canvas.context.drawImageCount).toBe(1);
-
-    runtime.destroy();
-  });
-
-  it("updates surface bounds through the surface API", () => {
-    const canvas = new FakeCanvas(false);
-    canvas.ownerDocument = document;
-    const element = document.createElement("section");
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
-      bounds: { x: 20, y: 30, width: 100, height: 50 }
-    });
-
-    runtime.onPaint(({ drawSurface }) => {
-      drawSurface(surface);
-    });
-
-    surface.setBounds({ x: 40, y: 45, width: 120, height: 60 });
-    (runtime as unknown as RuntimeInternals).flushPaint();
-
-    expect(surface.getBounds()).toEqual({
-      x: 40,
-      y: 45,
-      width: 120,
-      height: 60
-    });
-    expect(element.style.width).toBe("120px");
-    expect(element.style.height).toBe("60px");
-    expect(element.style.transform).toBe("matrix(1, 0, 0, 1, 40, 45)");
-
-    runtime.destroy();
-  });
-
-  it("returns the existing surface when the same element is registered again", () => {
-    const canvas = new FakeCanvas(false);
-    canvas.ownerDocument = document;
-    const element = document.createElement("section");
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
-      bounds: { x: 1, y: 2, width: 30, height: 40 }
-    });
-
-    const sameSurface = runtime.registerSurface(element as unknown as HTMLElement, {
-      bounds: { x: 10, y: 20, width: 300, height: 400 }
-    });
-
-    expect(sameSurface).toBe(surface);
-    expect(surface.getBounds()).toEqual({
-      x: 1,
-      y: 2,
-      width: 30,
-      height: 40
-    });
-
-    surface.setBounds({ x: 10, y: 20, width: 300, height: 400 });
-
-    expect(surface.getBounds()).toEqual({
-      x: 10,
-      y: 20,
-      width: 300,
-      height: 400
-    });
-
-    runtime.destroy();
-  });
-
-  it("requests native paint when bounds update outside paint", () => {
-    const canvas = new FakeCanvas(true);
-    canvas.ownerDocument = document;
-    const element = document.createElement("section");
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
-      bounds: { x: 0, y: 0, width: 10, height: 10 }
-    });
-
-    canvas.requestPaintCount = 0;
-    surface.setBounds({ x: 10, y: 20, width: 30, height: 40 });
-
-    expect(canvas.requestPaintCount).toBe(1);
-
-    runtime.destroy();
-  });
-
-  it("paints multiple surfaces after bounds updates", () => {
-    const canvas = new FakeCanvas(false);
-    canvas.ownerDocument = document;
-    const firstElement = document.createElement("section");
-    const secondElement = document.createElement("aside");
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    const firstSurface = runtime.registerSurface(firstElement as unknown as HTMLElement, {
-      bounds: { x: 0, y: 0, width: 10, height: 10 }
-    });
-    const secondSurface = runtime.registerSurface(secondElement as unknown as HTMLElement, {
-      bounds: { x: 20, y: 20, width: 20, height: 20 }
-    });
-
-    runtime.onPaint(({ drawSurface }) => {
-      drawSurface(firstSurface);
-      drawSurface(secondSurface);
-    });
-
-    firstSurface.setBounds({ x: 5, y: 6, width: 30, height: 40 });
-    secondSurface.setBounds({ x: 50, y: 60, width: 70, height: 80 });
-    (runtime as unknown as RuntimeInternals).flushPaint();
-
-    expect(canvas.context.drawImageCount).toBe(2);
-    expect(firstElement.style.width).toBe("30px");
-    expect(firstElement.style.height).toBe("40px");
-    expect(firstElement.style.transform).toBe("matrix(1, 0, 0, 1, 5, 6)");
-    expect(secondElement.style.width).toBe("70px");
-    expect(secondElement.style.height).toBe("80px");
-    expect(secondElement.style.transform).toBe("matrix(1, 0, 0, 1, 50, 60)");
-
-    runtime.destroy();
-  });
-
-  it("keeps setBounds in CSS pixels while drawing in backing-store pixels", () => {
-    const canvas = new FakeCanvas(false);
-    canvas.ownerDocument = document;
-    const element = document.createElement("section");
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
-      bounds: { x: 0, y: 0, width: 10, height: 10 }
-    });
-
-    runtime.onPaint(({ drawSurface }) => {
-      drawSurface(surface);
-    });
-
-    surface.setBounds({ x: 10, y: 15, width: 25, height: 30 });
-    (runtime as unknown as RuntimeInternals).flushPaint();
-
-    expect(element.style.width).toBe("25px");
-    expect(element.style.height).toBe("30px");
-    expect(element.style.transform).toBe("matrix(1, 0, 0, 1, 10, 15)");
-    expect(canvas.context.drawImageCalls).toEqual([
-      { x: 20, y: 30, width: 50, height: 60 }
-    ]);
-
-    runtime.destroy();
-  });
-
-  it("does not request a redundant native paint when bounds update during paint", () => {
-    const canvas = new FakeCanvas(true);
-    canvas.ownerDocument = document;
-    const element = document.createElement("section");
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
-      bounds: { x: 0, y: 0, width: 10, height: 10 }
-    });
-
-    runtime.onPaint(({ drawSurface }) => {
-      surface.setBounds({ x: 10, y: 20, width: 30, height: 40 });
-      drawSurface(surface);
-    });
-
-    canvas.requestPaintCount = 0;
-    canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
-
-    expect(canvas.requestPaintCount).toBe(0);
-    expect(element.style.width).toBe("30px");
-    expect(element.style.height).toBe("40px");
-    expect(element.style.transform).toBe("matrix(1, 0, 0, 1, 12, 18)");
-
-    runtime.destroy();
-  });
-
-  it("resolves paintOnce after a fallback paint pass without starting the frame loop", async () => {
-    const canvas = new FakeCanvas(false);
-    canvas.ownerDocument = document;
-    const element = document.createElement("section");
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
-      bounds: { x: 20, y: 30, width: 100, height: 50 }
-    });
-    let paintCount = 0;
-
-    runtime.onPaint(({ drawSurface }) => {
-      paintCount += 1;
-      drawSurface(surface);
-    });
-
-    expect(paintCount).toBe(0);
-
-    await runtime.paintOnce();
-
-    expect(paintCount).toBe(1);
-    expect(canvas.context.drawImageCount).toBe(1);
-    expect(element.style.pointerEvents).toBe("auto");
-
-    runtime.destroy();
-  });
-
-  it("resolves concurrent paintOnce calls from the same fallback paint pass", async () => {
-    const canvas = new FakeCanvas(false);
-    canvas.ownerDocument = document;
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    let paintCount = 0;
-
-    runtime.onPaint(() => {
-      paintCount += 1;
-    });
-
-    const firstPaint = runtime.paintOnce();
-    const secondPaint = runtime.paintOnce();
-
-    expect(paintCount).toBe(0);
-
-    await Promise.all([firstPaint, secondPaint]);
-
-    expect(paintCount).toBe(1);
-
-    runtime.destroy();
-  });
-
-  it("resolves paintOnce after the native paint event is flushed", async () => {
-    const canvas = new FakeCanvas(true);
-    canvas.ownerDocument = document;
-    const element = document.createElement("section");
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
-      bounds: { x: 20, y: 30, width: 100, height: 50 }
-    });
-    let resolved = false;
-
-    runtime.onPaint(({ drawSurface }) => {
-      drawSurface(surface);
-    });
-
-    canvas.requestPaintCount = 0;
-    const paint = runtime.paintOnce().then(() => {
-      resolved = true;
-    });
-
-    await Promise.resolve();
-
-    expect(canvas.requestPaintCount).toBe(1);
-    expect(resolved).toBe(false);
-
-    canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
-    await paint;
-
-    expect(resolved).toBe(true);
-    expect(element.style.pointerEvents).toBe("auto");
-
-    runtime.destroy();
-  });
-
-  it("resolves concurrent native paintOnce calls from the same browser paint event", async () => {
-    const canvas = new FakeCanvas(true);
-    canvas.ownerDocument = document;
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    let paintCount = 0;
-    let firstResolved = false;
-    let secondResolved = false;
-
-    runtime.onPaint(() => {
-      paintCount += 1;
-    });
-
-    canvas.requestPaintCount = 0;
-    const firstPaint = runtime.paintOnce().then(() => {
-      firstResolved = true;
-    });
-    const secondPaint = runtime.paintOnce().then(() => {
-      secondResolved = true;
-    });
-
-    await Promise.resolve();
-
-    expect(canvas.requestPaintCount).toBe(1);
-    expect(firstResolved).toBe(false);
-    expect(secondResolved).toBe(false);
-
-    canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
-    await Promise.all([firstPaint, secondPaint]);
-
-    expect(paintCount).toBe(1);
-    expect(firstResolved).toBe(true);
-    expect(secondResolved).toBe(true);
-
-    runtime.destroy();
-  });
-
-  it("resolves native paintOnce called inside onPaint from the next browser paint event", async () => {
-    const canvas = new FakeCanvas(true);
-    canvas.ownerDocument = document;
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    let paintCount = 0;
-    const nestedPaints: Array<Promise<void>> = [];
-    let nestedResolvedAtPaintCount = 0;
-
-    runtime.onPaint(() => {
-      paintCount += 1;
-      if (nestedPaints.length === 0) {
-        nestedPaints.push(runtime.paintOnce().then(() => {
-          nestedResolvedAtPaintCount = paintCount;
-        }));
-      }
-    });
-
-    canvas.requestPaintCount = 0;
-    const firstPaint = runtime.paintOnce();
-    canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
-    await firstPaint;
-
-    expect(nestedPaints).toHaveLength(1);
-    expect(canvas.requestPaintCount).toBe(2);
-    expect(nestedResolvedAtPaintCount).toBe(0);
-
-    canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
-    await Promise.all(nestedPaints);
-
-    expect(paintCount).toBe(2);
-    expect(nestedResolvedAtPaintCount).toBe(2);
-
-    runtime.destroy();
-  });
-
-  it("resolves paintOnce called inside onPaint from the next fallback paint pass", async () => {
-    const canvas = new FakeCanvas(false);
-    canvas.ownerDocument = document;
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    let paintCount = 0;
-    const nestedPaints: Array<Promise<void>> = [];
-    let nestedResolvedAtPaintCount = 0;
-
-    runtime.onPaint(() => {
-      paintCount += 1;
-      if (nestedPaints.length === 0) {
-        nestedPaints.push(runtime.paintOnce().then(() => {
-          nestedResolvedAtPaintCount = paintCount;
-        }));
-      }
-    });
-
-    await runtime.paintOnce();
-
-    expect(nestedPaints).toHaveLength(1);
-    await Promise.all(nestedPaints);
-
-    expect(paintCount).toBe(2);
-    expect(nestedResolvedAtPaintCount).toBe(2);
-
-    runtime.destroy();
-  });
-
-  it("rejects pending paintOnce work when the runtime is destroyed", async () => {
-    const canvas = new FakeCanvas(true);
-    canvas.ownerDocument = document;
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-
-    const paint = runtime.paintOnce();
-    runtime.destroy();
-
-    await expect(paint).rejects.toThrow(
-      "Cannot complete paintOnce() after Prism CanvasRuntime is destroyed."
-    );
-  });
-
-  it("rejects paintOnce waiters with paint handler errors", async () => {
-    const canvas = new FakeCanvas(false);
-    canvas.ownerDocument = document;
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-
-    runtime.onPaint(() => {
-      throw new Error("paint failed");
-    });
-
-    await expect(runtime.paintOnce()).rejects.toThrow("paint failed");
-    expect(() => {
       (runtime as unknown as RuntimeInternals).flushPaint();
-    }).toThrow("paint failed");
 
-    runtime.destroy();
-  });
+      expect(element.style.width).toBe("100px");
+      expect(element.style.height).toBe("50px");
+      expect(element.style.pointerEvents).toBe("auto");
+      expect(element.inert).toBe(false);
+      expect(canvas.context.drawImageCount).toBe(1);
 
-  it("rejects native paintOnce waiters with paint handler errors", async () => {
-    const canvas = new FakeCanvas(true);
-    canvas.ownerDocument = document;
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-
-    runtime.onPaint(() => {
-      throw new Error("native paint failed");
+      runtime.destroy();
     });
 
-    const paint = runtime.paintOnce();
-    const rejected = expect(paint).rejects.toThrow("native paint failed");
+    it("updates surface bounds through the surface API", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const element = document.createElement("section");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 20, y: 30, width: 100, height: 50 }
+      });
 
-    expect(() => {
+      runtime.onPaint(({ drawSurface }) => {
+        drawSurface(surface);
+      });
+
+      surface.setBounds({ x: 40, y: 45, width: 120, height: 60 });
+      (runtime as unknown as RuntimeInternals).flushPaint();
+
+      expect(surface.getBounds()).toEqual({
+        x: 40,
+        y: 45,
+        width: 120,
+        height: 60
+      });
+      expect(element.style.width).toBe("120px");
+      expect(element.style.height).toBe("60px");
+      expect(element.style.transform).toBe("matrix(1, 0, 0, 1, 40, 45)");
+
+      runtime.destroy();
+    });
+
+    it("returns the existing surface when the same element is registered again", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const element = document.createElement("section");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 1, y: 2, width: 30, height: 40 }
+      });
+
+      const sameSurface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 10, y: 20, width: 300, height: 400 }
+      });
+
+      expect(sameSurface).toBe(surface);
+      expect(surface.getBounds()).toEqual({
+        x: 1,
+        y: 2,
+        width: 30,
+        height: 40
+      });
+
+      surface.setBounds({ x: 10, y: 20, width: 300, height: 400 });
+
+      expect(surface.getBounds()).toEqual({
+        x: 10,
+        y: 20,
+        width: 300,
+        height: 400
+      });
+
+      runtime.destroy();
+    });
+
+    it("requests native paint when bounds update outside paint", () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const element = document.createElement("section");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 0, y: 0, width: 10, height: 10 }
+      });
+
+      canvas.requestPaintCount = 0;
+      surface.setBounds({ x: 10, y: 20, width: 30, height: 40 });
+
+      expect(canvas.requestPaintCount).toBe(1);
+
+      runtime.destroy();
+    });
+
+    it("paints multiple surfaces after bounds updates", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const firstElement = document.createElement("section");
+      const secondElement = document.createElement("aside");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const firstSurface = runtime.registerSurface(
+        firstElement as unknown as HTMLElement,
+        {
+          bounds: { x: 0, y: 0, width: 10, height: 10 }
+        }
+      );
+      const secondSurface = runtime.registerSurface(
+        secondElement as unknown as HTMLElement,
+        {
+          bounds: { x: 20, y: 20, width: 20, height: 20 }
+        }
+      );
+
+      runtime.onPaint(({ drawSurface }) => {
+        drawSurface(firstSurface);
+        drawSurface(secondSurface);
+      });
+
+      firstSurface.setBounds({ x: 5, y: 6, width: 30, height: 40 });
+      secondSurface.setBounds({ x: 50, y: 60, width: 70, height: 80 });
+      (runtime as unknown as RuntimeInternals).flushPaint();
+
+      expect(canvas.context.drawImageCount).toBe(2);
+      expect(firstElement.style.width).toBe("30px");
+      expect(firstElement.style.height).toBe("40px");
+      expect(firstElement.style.transform).toBe("matrix(1, 0, 0, 1, 5, 6)");
+      expect(secondElement.style.width).toBe("70px");
+      expect(secondElement.style.height).toBe("80px");
+      expect(secondElement.style.transform).toBe("matrix(1, 0, 0, 1, 50, 60)");
+
+      runtime.destroy();
+    });
+
+    it("keeps setBounds in CSS pixels while drawing in backing-store pixels", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const element = document.createElement("section");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 0, y: 0, width: 10, height: 10 }
+      });
+
+      runtime.onPaint(({ drawSurface }) => {
+        drawSurface(surface);
+      });
+
+      surface.setBounds({ x: 10, y: 15, width: 25, height: 30 });
+      (runtime as unknown as RuntimeInternals).flushPaint();
+
+      expect(element.style.width).toBe("25px");
+      expect(element.style.height).toBe("30px");
+      expect(element.style.transform).toBe("matrix(1, 0, 0, 1, 10, 15)");
+      expect(canvas.context.drawImageCalls).toEqual([
+        { x: 20, y: 30, width: 50, height: 60 }
+      ]);
+
+      runtime.destroy();
+    });
+
+    it("does not request a redundant native paint when bounds update during paint", () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const element = document.createElement("section");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 0, y: 0, width: 10, height: 10 }
+      });
+
+      runtime.onPaint(({ drawSurface }) => {
+        surface.setBounds({ x: 10, y: 20, width: 30, height: 40 });
+        drawSurface(surface);
+      });
+
+      canvas.requestPaintCount = 0;
       canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
-    }).toThrow("native paint failed");
-    await rejected;
 
-    runtime.destroy();
+      expect(canvas.requestPaintCount).toBe(0);
+      expect(element.style.width).toBe("30px");
+      expect(element.style.height).toBe("40px");
+      expect(element.style.transform).toBe("matrix(1, 0, 0, 1, 12, 18)");
+
+      runtime.destroy();
+    });
   });
 
-  it("keeps undrawn surfaces inactive", () => {
-    const canvas = new FakeCanvas(false);
-    canvas.ownerDocument = document;
-    const element = document.createElement("section");
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+  describe("multiple surfaces", () => {
+    it("draws multiple surfaces in one paint pass", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const firstElement = document.createElement("section");
+      const secondElement = document.createElement("aside");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const firstSurface = runtime.registerSurface(
+        firstElement as unknown as HTMLElement,
+        {
+          bounds: { x: 10, y: 20, width: 30, height: 40 }
+        }
+      );
+      const secondSurface = runtime.registerSurface(
+        secondElement as unknown as HTMLElement,
+        {
+          bounds: { x: 50, y: 60, width: 70, height: 80 }
+        }
+      );
 
-    runtime.registerSurface(element as unknown as HTMLElement, {
-      bounds: { x: 0, y: 0, width: 100, height: 50 }
+      runtime.onPaint(({ drawSurface }) => {
+        drawSurface(firstSurface);
+        drawSurface(secondSurface);
+      });
+
+      (runtime as unknown as RuntimeInternals).flushPaint();
+
+      expect(canvas.context.drawImageCount).toBe(2);
+      expect(canvas.context.drawImageCalls).toEqual([
+        { x: 20, y: 40, width: 60, height: 80 },
+        { x: 100, y: 120, width: 140, height: 160 }
+      ]);
+      expect(firstElement.style.pointerEvents).toBe("auto");
+      expect(secondElement.style.pointerEvents).toBe("auto");
+
+      runtime.destroy();
     });
-    runtime.onPaint(() => {});
 
-    (runtime as unknown as RuntimeInternals).flushPaint();
+    it("preserves caller draw order for native surfaces", () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const firstElement = document.createElement("section");
+      const secondElement = document.createElement("aside");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const firstSurface = runtime.registerSurface(
+        firstElement as unknown as HTMLElement,
+        {
+          bounds: { x: 10, y: 20, width: 30, height: 40 }
+        }
+      );
+      const secondSurface = runtime.registerSurface(
+        secondElement as unknown as HTMLElement,
+        {
+          bounds: { x: 50, y: 60, width: 70, height: 80 }
+        }
+      );
 
-    expect(element.style.pointerEvents).toBe("none");
-    expect(element.inert).toBe(true);
+      runtime.onPaint(({ drawSurface }) => {
+        drawSurface(secondSurface);
+        drawSurface(firstSurface);
+      });
 
-    runtime.destroy();
+      canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+
+      expect(canvas.context.drawElementImageCalls).toEqual([
+        {
+          element: secondElement,
+          x: 100,
+          y: 120,
+          width: 140,
+          height: 160
+        },
+        {
+          element: firstElement,
+          x: 20,
+          y: 40,
+          width: 60,
+          height: 80
+        }
+      ]);
+
+      runtime.destroy();
+    });
+
+    it("deactivates skipped surfaces and reactivates them when drawn later", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const firstElement = document.createElement("section");
+      const secondElement = document.createElement("aside");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const firstSurface = runtime.registerSurface(
+        firstElement as unknown as HTMLElement,
+        {
+          bounds: { x: 0, y: 0, width: 100, height: 50 }
+        }
+      );
+      const secondSurface = runtime.registerSurface(
+        secondElement as unknown as HTMLElement,
+        {
+          bounds: { x: 120, y: 0, width: 100, height: 50 }
+        }
+      );
+      let paintFirst = true;
+
+      runtime.onPaint(({ drawSurface }) => {
+        if (paintFirst) {
+          drawSurface(firstSurface);
+          return;
+        }
+
+        drawSurface(secondSurface);
+      });
+
+      (runtime as unknown as RuntimeInternals).flushPaint();
+
+      expect(firstElement.style.pointerEvents).toBe("auto");
+      expect(firstElement.inert).toBe(false);
+      expect(secondElement.style.pointerEvents).toBe("none");
+      expect(secondElement.inert).toBe(true);
+
+      paintFirst = false;
+      (runtime as unknown as RuntimeInternals).flushPaint();
+
+      expect(firstElement.style.pointerEvents).toBe("none");
+      expect(firstElement.inert).toBe(true);
+      expect(secondElement.style.pointerEvents).toBe("auto");
+      expect(secondElement.inert).toBe(false);
+
+      runtime.destroy();
+    });
+
+    it("keeps focus interactivity isolated across multiple surfaces", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const focusedElement = document.createElement("section");
+      const idleElement = document.createElement("aside");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const focusedSurface = runtime.registerSurface(
+        focusedElement as unknown as HTMLElement,
+        {
+          bounds: { x: 0, y: 0, width: 100, height: 50 }
+        }
+      );
+
+      runtime.registerSurface(idleElement as unknown as HTMLElement, {
+        bounds: { x: 120, y: 0, width: 100, height: 50 }
+      });
+      runtime.onPaint(({ drawSurface }) => {
+        drawSurface(focusedSurface);
+      });
+
+      (runtime as unknown as RuntimeInternals).flushPaint();
+
+      expect(focusedElement.style.pointerEvents).toBe("auto");
+      expect(focusedElement.inert).toBe(false);
+      expect(idleElement.style.pointerEvents).toBe("none");
+      expect(idleElement.inert).toBe(true);
+
+      runtime.invalidate();
+      (runtime as unknown as RuntimeInternals).flushPaint();
+
+      expect(focusedElement.style.pointerEvents).toBe("auto");
+      expect(focusedElement.inert).toBe(false);
+      expect(idleElement.style.pointerEvents).toBe("none");
+      expect(idleElement.inert).toBe(true);
+
+      runtime.destroy();
+    });
   });
 
-  it("restores DOM ownership and attributes when a surface is disposed", () => {
-    const canvas = new FakeCanvas(false);
-    canvas.ownerDocument = document;
-    const parent = document.createElement("div");
-    const element = document.createElement("section");
-    const sibling = document.createElement("aside");
-    parent.appendChild(element);
-    parent.appendChild(sibling);
-    element.setAttribute("style", "color: red;");
-    element.setAttribute("aria-label", "Original label");
-    element.setAttribute("data-prism-surface", "old-value");
-    element.inert = true;
+  describe("paintOnce", () => {
+    it("resolves paintOnce after a fallback paint pass without starting the frame loop", async () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const element = document.createElement("section");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 20, y: 30, width: 100, height: 50 }
+      });
+      let paintCount = 0;
 
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
-      bounds: { x: 0, y: 0, width: 100, height: 50 },
-      ariaLabel: "Runtime label"
+      runtime.onPaint(({ drawSurface }) => {
+        paintCount += 1;
+        drawSurface(surface);
+      });
+
+      expect(paintCount).toBe(0);
+
+      await runtime.paintOnce();
+
+      expect(paintCount).toBe(1);
+      expect(canvas.context.drawImageCount).toBe(1);
+      expect(element.style.pointerEvents).toBe("auto");
+
+      runtime.destroy();
     });
 
-    expect(element.parentElement).toBe(canvas);
-    expect(element.getAttribute("aria-label")).toBe("Runtime label");
+    it("resolves concurrent paintOnce calls from the same fallback paint pass", async () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      let paintCount = 0;
 
-    surface.dispose();
+      runtime.onPaint(() => {
+        paintCount += 1;
+      });
 
-    expect(surface.isDisposed).toBe(true);
-    expect(parent.children).toEqual([element, sibling]);
-    expect(element.getAttribute("style")).toBe("color: red;");
-    expect(element.getAttribute("aria-label")).toBe("Original label");
-    expect(element.getAttribute("data-prism-surface")).toBe("old-value");
-    expect(element.inert).toBe(true);
+      const firstPaint = runtime.paintOnce();
+      const secondPaint = runtime.paintOnce();
 
-    runtime.destroy();
+      expect(paintCount).toBe(0);
+
+      await Promise.all([firstPaint, secondPaint]);
+
+      expect(paintCount).toBe(1);
+
+      runtime.destroy();
+    });
+
+    it("resolves paintOnce after the native paint event is flushed", async () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const element = document.createElement("section");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 20, y: 30, width: 100, height: 50 }
+      });
+      let resolved = false;
+
+      runtime.onPaint(({ drawSurface }) => {
+        drawSurface(surface);
+      });
+
+      canvas.requestPaintCount = 0;
+      const paint = runtime.paintOnce().then(() => {
+        resolved = true;
+      });
+
+      await Promise.resolve();
+
+      expect(canvas.requestPaintCount).toBe(1);
+      expect(resolved).toBe(false);
+
+      canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+      await paint;
+
+      expect(resolved).toBe(true);
+      expect(element.style.pointerEvents).toBe("auto");
+
+      runtime.destroy();
+    });
+
+    it("resolves concurrent native paintOnce calls from the same browser paint event", async () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      let paintCount = 0;
+      let firstResolved = false;
+      let secondResolved = false;
+
+      runtime.onPaint(() => {
+        paintCount += 1;
+      });
+
+      canvas.requestPaintCount = 0;
+      const firstPaint = runtime.paintOnce().then(() => {
+        firstResolved = true;
+      });
+      const secondPaint = runtime.paintOnce().then(() => {
+        secondResolved = true;
+      });
+
+      await Promise.resolve();
+
+      expect(canvas.requestPaintCount).toBe(1);
+      expect(firstResolved).toBe(false);
+      expect(secondResolved).toBe(false);
+
+      canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+      await Promise.all([firstPaint, secondPaint]);
+
+      expect(paintCount).toBe(1);
+      expect(firstResolved).toBe(true);
+      expect(secondResolved).toBe(true);
+
+      runtime.destroy();
+    });
+
+    it("resolves native paintOnce called inside onPaint from the next browser paint event", async () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      let paintCount = 0;
+      const nestedPaints: Array<Promise<void>> = [];
+      let nestedResolvedAtPaintCount = 0;
+
+      runtime.onPaint(() => {
+        paintCount += 1;
+        if (nestedPaints.length === 0) {
+          nestedPaints.push(
+            runtime.paintOnce().then(() => {
+              nestedResolvedAtPaintCount = paintCount;
+            })
+          );
+        }
+      });
+
+      canvas.requestPaintCount = 0;
+      const firstPaint = runtime.paintOnce();
+      canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+      await firstPaint;
+
+      expect(nestedPaints).toHaveLength(1);
+      expect(canvas.requestPaintCount).toBe(2);
+      expect(nestedResolvedAtPaintCount).toBe(0);
+
+      canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+      await Promise.all(nestedPaints);
+
+      expect(paintCount).toBe(2);
+      expect(nestedResolvedAtPaintCount).toBe(2);
+
+      runtime.destroy();
+    });
+
+    it("resolves paintOnce called inside onPaint from the next fallback paint pass", async () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      let paintCount = 0;
+      const nestedPaints: Array<Promise<void>> = [];
+      let nestedResolvedAtPaintCount = 0;
+
+      runtime.onPaint(() => {
+        paintCount += 1;
+        if (nestedPaints.length === 0) {
+          nestedPaints.push(
+            runtime.paintOnce().then(() => {
+              nestedResolvedAtPaintCount = paintCount;
+            })
+          );
+        }
+      });
+
+      await runtime.paintOnce();
+
+      expect(nestedPaints).toHaveLength(1);
+      await Promise.all(nestedPaints);
+
+      expect(paintCount).toBe(2);
+      expect(nestedResolvedAtPaintCount).toBe(2);
+
+      runtime.destroy();
+    });
+
+    it("rejects pending paintOnce work when the runtime is destroyed", async () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+      const paint = runtime.paintOnce();
+      runtime.destroy();
+
+      await expect(paint).rejects.toThrow(
+        "Cannot complete paintOnce() after Prism CanvasRuntime is destroyed."
+      );
+    });
+
+    it("rejects paintOnce waiters with paint handler errors", async () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+      runtime.onPaint(() => {
+        throw new Error("paint failed");
+      });
+
+      await expect(runtime.paintOnce()).rejects.toThrow("paint failed");
+      expect(() => {
+        (runtime as unknown as RuntimeInternals).flushPaint();
+      }).toThrow("paint failed");
+
+      runtime.destroy();
+    });
+
+    it("rejects native paintOnce waiters with paint handler errors", async () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+      runtime.onPaint(() => {
+        throw new Error("native paint failed");
+      });
+
+      const paint = runtime.paintOnce();
+      const rejected = expect(paint).rejects.toThrow("native paint failed");
+
+      expect(() => {
+        canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+      }).toThrow("native paint failed");
+      await rejected;
+
+      runtime.destroy();
+    });
   });
 
-  it("does not let one runtime unregister a surface owned by another runtime", () => {
-    const firstCanvas = new FakeCanvas(false);
-    const secondCanvas = new FakeCanvas(false);
-    firstCanvas.ownerDocument = document;
-    secondCanvas.ownerDocument = document;
-    const parent = document.createElement("div");
-    const element = document.createElement("section");
-    parent.appendChild(element);
-    const firstRuntime = new CanvasRuntime(firstCanvas as unknown as HTMLCanvasElement);
-    const secondRuntime = new CanvasRuntime(secondCanvas as unknown as HTMLCanvasElement);
-    const surface = secondRuntime.registerSurface(element as unknown as HTMLElement, {
-      bounds: { x: 0, y: 0, width: 100, height: 50 }
+  describe("surface lifecycle", () => {
+    it("keeps undrawn surfaces inactive", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const element = document.createElement("section");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+      runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 0, y: 0, width: 100, height: 50 }
+      });
+      runtime.onPaint(() => {});
+
+      (runtime as unknown as RuntimeInternals).flushPaint();
+
+      expect(element.style.pointerEvents).toBe("none");
+      expect(element.inert).toBe(true);
+
+      runtime.destroy();
     });
 
-    expect(() => {
-      firstRuntime.unregisterSurface(surface);
-    }).toThrow("Prism CanvasRuntime can only use surfaces registered with this runtime.");
+    it("restores DOM ownership and attributes when a surface is disposed", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const parent = document.createElement("div");
+      const element = document.createElement("section");
+      const sibling = document.createElement("aside");
+      parent.appendChild(element);
+      parent.appendChild(sibling);
+      element.setAttribute("style", "color: red;");
+      element.setAttribute("aria-label", "Original label");
+      element.setAttribute("data-prism-surface", "old-value");
+      element.inert = true;
 
-    expect(surface.isDisposed).toBe(false);
-    expect(element.parentElement).toBe(secondCanvas);
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 0, y: 0, width: 100, height: 50 },
+        ariaLabel: "Runtime label"
+      });
 
-    secondRuntime.unregisterSurface(surface);
+      expect(element.parentElement).toBe(canvas);
+      expect(element.getAttribute("aria-label")).toBe("Runtime label");
 
-    expect(surface.isDisposed).toBe(true);
-    expect(parent.children).toEqual([element]);
+      surface.dispose();
 
-    firstRuntime.destroy();
-    secondRuntime.destroy();
+      expect(surface.isDisposed).toBe(true);
+      expect(parent.children).toEqual([element, sibling]);
+      expect(element.getAttribute("style")).toBe("color: red;");
+      expect(element.getAttribute("aria-label")).toBe("Original label");
+      expect(element.getAttribute("data-prism-surface")).toBe("old-value");
+      expect(element.inert).toBe(true);
+
+      runtime.destroy();
+    });
+
+    it("restores multiple surfaces independently across unregister and destroy", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const firstParent = document.createElement("div");
+      const secondParent = document.createElement("main");
+      const firstElement = document.createElement("section");
+      const firstSibling = document.createElement("aside");
+      const secondSibling = document.createElement("header");
+      const secondElement = document.createElement("article");
+      firstParent.appendChild(firstElement);
+      firstParent.appendChild(firstSibling);
+      secondParent.appendChild(secondSibling);
+      secondParent.appendChild(secondElement);
+      firstElement.setAttribute("style", "color: red;");
+      secondElement.setAttribute("style", "color: blue;");
+
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const firstSurface = runtime.registerSurface(
+        firstElement as unknown as HTMLElement,
+        {
+          bounds: { x: 0, y: 0, width: 100, height: 50 }
+        }
+      );
+      const secondSurface = runtime.registerSurface(
+        secondElement as unknown as HTMLElement,
+        {
+          bounds: { x: 120, y: 0, width: 100, height: 50 }
+        }
+      );
+
+      expect(firstElement.parentElement).toBe(canvas);
+      expect(secondElement.parentElement).toBe(canvas);
+
+      runtime.unregisterSurface(firstSurface);
+
+      expect(firstSurface.isDisposed).toBe(true);
+      expect(secondSurface.isDisposed).toBe(false);
+      expect(firstParent.children).toEqual([firstElement, firstSibling]);
+      expect(firstElement.getAttribute("style")).toBe("color: red;");
+      expect(secondElement.parentElement).toBe(canvas);
+
+      runtime.destroy();
+
+      expect(secondSurface.isDisposed).toBe(true);
+      expect(secondParent.children).toEqual([secondSibling, secondElement]);
+      expect(secondElement.getAttribute("style")).toBe("color: blue;");
+    });
+
+    it("does not let one surface disposal corrupt another surface restore path", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const parent = document.createElement("div");
+      const firstElement = document.createElement("section");
+      const secondElement = document.createElement("article");
+      const sibling = document.createElement("aside");
+      parent.appendChild(firstElement);
+      parent.appendChild(secondElement);
+      parent.appendChild(sibling);
+
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const firstSurface = runtime.registerSurface(
+        firstElement as unknown as HTMLElement,
+        {
+          bounds: { x: 0, y: 0, width: 100, height: 50 }
+        }
+      );
+      const secondSurface = runtime.registerSurface(
+        secondElement as unknown as HTMLElement,
+        {
+          bounds: { x: 120, y: 0, width: 100, height: 50 }
+        }
+      );
+
+      firstSurface.dispose();
+      secondSurface.dispose();
+
+      expect(parent.children).toEqual([firstElement, secondElement, sibling]);
+
+      runtime.destroy();
+    });
+
+    it("restores multiple registered surfaces in original order on destroy", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const parent = document.createElement("div");
+      const firstElement = document.createElement("section");
+      const secondElement = document.createElement("article");
+      const thirdElement = document.createElement("nav");
+      const sibling = document.createElement("aside");
+      parent.appendChild(firstElement);
+      parent.appendChild(secondElement);
+      parent.appendChild(thirdElement);
+      parent.appendChild(sibling);
+
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const firstSurface = runtime.registerSurface(
+        firstElement as unknown as HTMLElement,
+        {
+          bounds: { x: 0, y: 0, width: 100, height: 50 }
+        }
+      );
+      const secondSurface = runtime.registerSurface(
+        secondElement as unknown as HTMLElement,
+        {
+          bounds: { x: 120, y: 0, width: 100, height: 50 }
+        }
+      );
+      const thirdSurface = runtime.registerSurface(
+        thirdElement as unknown as HTMLElement,
+        {
+          bounds: { x: 240, y: 0, width: 100, height: 50 }
+        }
+      );
+
+      runtime.destroy();
+
+      expect(firstSurface.isDisposed).toBe(true);
+      expect(secondSurface.isDisposed).toBe(true);
+      expect(thirdSurface.isDisposed).toBe(true);
+      expect(parent.children).toEqual([
+        firstElement,
+        secondElement,
+        thirdElement,
+        sibling
+      ]);
+    });
+
+    it("supports unregistering and re-registering the same element", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const parent = document.createElement("div");
+      const element = document.createElement("section");
+      const sibling = document.createElement("aside");
+      parent.appendChild(element);
+      parent.appendChild(sibling);
+
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const firstSurface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 0, y: 0, width: 100, height: 50 }
+      });
+
+      runtime.unregisterSurface(firstSurface);
+
+      expect(firstSurface.isDisposed).toBe(true);
+      expect(parent.children).toEqual([element, sibling]);
+
+      const secondSurface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 20, y: 30, width: 120, height: 60 }
+      });
+
+      expect(secondSurface).not.toBe(firstSurface);
+      expect(secondSurface.getBounds()).toEqual({
+        x: 20,
+        y: 30,
+        width: 120,
+        height: 60
+      });
+      expect(element.parentElement).toBe(canvas);
+
+      runtime.destroy();
+
+      expect(secondSurface.isDisposed).toBe(true);
+      expect(parent.children).toEqual([element, sibling]);
+    });
+
+    it("restores a surface around external DOM mutations near its placeholder", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const parent = document.createElement("div");
+      const before = document.createElement("header");
+      const element = document.createElement("section");
+      const after = document.createElement("footer");
+      parent.appendChild(before);
+      parent.appendChild(element);
+      parent.appendChild(after);
+
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 0, y: 0, width: 100, height: 50 }
+      });
+      const insertedBeforeSlot = document.createElement("nav");
+      const insertedAfterSlot = document.createElement("aside");
+      const restoreSlot = parent.children[1] ?? null;
+      parent.insertBefore(insertedBeforeSlot, restoreSlot);
+      parent.insertBefore(insertedAfterSlot, after);
+
+      runtime.unregisterSurface(surface);
+
+      expect(parent.children).toHaveLength(5);
+      expect(parent.children[0]).toBe(before);
+      expect(parent.children[1]).toBe(insertedBeforeSlot);
+      expect(parent.children[2]).toBe(element);
+      expect(parent.children[3]).toBe(insertedAfterSlot);
+      expect(parent.children[4]).toBe(after);
+
+      runtime.destroy();
+    });
   });
 
-  it("centralizes client and backing-store coordinate conversion", () => {
-    const canvas = new FakeCanvas(false);
-    canvas.ownerDocument = document;
-    canvas.clientWidth = 400;
-    canvas.clientHeight = 300;
+  describe("runtime ownership", () => {
+    it("does not let one runtime unregister a surface owned by another runtime", () => {
+      const firstCanvas = new FakeCanvas(false);
+      const secondCanvas = new FakeCanvas(false);
+      firstCanvas.ownerDocument = document;
+      secondCanvas.ownerDocument = document;
+      const parent = document.createElement("div");
+      const element = document.createElement("section");
+      parent.appendChild(element);
+      const firstRuntime = new CanvasRuntime(firstCanvas as unknown as HTMLCanvasElement);
+      const secondRuntime = new CanvasRuntime(
+        secondCanvas as unknown as HTMLCanvasElement
+      );
+      const surface = secondRuntime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 0, y: 0, width: 100, height: 50 }
+      });
 
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      expect(() => {
+        firstRuntime.unregisterSurface(surface);
+      }).toThrow(
+        "Prism CanvasRuntime can only use surfaces registered with this runtime."
+      );
 
-    expect(runtime.width).toBe(400);
-    expect(runtime.height).toBe(300);
-    expect(runtime.clientToCanvasPoint(210, 170)).toEqual({ x: 200, y: 150 });
-    expect(runtime.cssLengthToCanvasPixels(10)).toBe(20);
-    expect(runtime.cssPointToCanvasPixels({ x: 12, y: 8 })).toEqual({
-      x: 24,
-      y: 16
+      expect(surface.isDisposed).toBe(false);
+      expect(element.parentElement).toBe(secondCanvas);
+
+      secondRuntime.unregisterSurface(surface);
+
+      expect(surface.isDisposed).toBe(true);
+      expect(parent.children).toEqual([element]);
+
+      firstRuntime.destroy();
+      secondRuntime.destroy();
     });
 
-    runtime.destroy();
+    it("does not let one runtime draw a surface owned by another runtime", () => {
+      const firstCanvas = new FakeCanvas(false);
+      const secondCanvas = new FakeCanvas(false);
+      firstCanvas.ownerDocument = document;
+      secondCanvas.ownerDocument = document;
+      const element = document.createElement("section");
+      const firstRuntime = new CanvasRuntime(firstCanvas as unknown as HTMLCanvasElement);
+      const secondRuntime = new CanvasRuntime(
+        secondCanvas as unknown as HTMLCanvasElement
+      );
+      const surface = secondRuntime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 0, y: 0, width: 100, height: 50 }
+      });
+
+      firstRuntime.onPaint(({ drawSurface }) => {
+        drawSurface(surface);
+      });
+
+      expect(() => {
+        (firstRuntime as unknown as RuntimeInternals).flushPaint();
+      }).toThrow(
+        "Prism CanvasRuntime can only use surfaces registered with this runtime."
+      );
+
+      expect(surface.isDisposed).toBe(false);
+      expect(element.parentElement).toBe(secondCanvas);
+
+      firstRuntime.destroy();
+      secondRuntime.destroy();
+    });
   });
 
-  it("cleans up registered surfaces and native paint hooks when destroyed", () => {
-    const canvas = new FakeCanvas(true);
-    canvas.ownerDocument = document;
-    const parent = document.createElement("div");
-    const element = document.createElement("section");
-    parent.appendChild(element);
+  describe("coordinates", () => {
+    it("centralizes client and backing-store coordinate conversion", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      canvas.clientWidth = 400;
+      canvas.clientHeight = 300;
 
-    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
-    const surface = runtime.registerSurface(element as unknown as HTMLElement, {
-      bounds: { x: 0, y: 0, width: 100, height: 50 }
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+      expect(runtime.width).toBe(400);
+      expect(runtime.height).toBe(300);
+      expect(runtime.clientToCanvasPoint(210, 170)).toEqual({ x: 200, y: 150 });
+      expect(runtime.cssLengthToCanvasPixels(10)).toBe(20);
+      expect(runtime.cssPointToCanvasPixels({ x: 12, y: 8 })).toEqual({
+        x: 24,
+        y: 16
+      });
+
+      runtime.destroy();
     });
+  });
 
-    expect(canvas.onpaint).not.toBeNull();
-    expect(element.parentElement).toBe(canvas);
+  describe("destroy", () => {
+    it("cleans up registered surfaces and native paint hooks when destroyed", () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const parent = document.createElement("div");
+      const element = document.createElement("section");
+      parent.appendChild(element);
 
-    runtime.destroy();
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 0, y: 0, width: 100, height: 50 }
+      });
 
-    expect(canvas.onpaint).toBeNull();
-    expect(surface.isDisposed).toBe(true);
-    expect(parent.children).toEqual([element]);
-    expect(element.getAttribute("style")).toBeNull();
+      expect(canvas.onpaint).not.toBeNull();
+      expect(element.parentElement).toBe(canvas);
+
+      runtime.destroy();
+
+      expect(canvas.onpaint).toBeNull();
+      expect(surface.isDisposed).toBe(true);
+      expect(parent.children).toEqual([element]);
+      expect(element.getAttribute("style")).toBeNull();
+    });
   });
 });
