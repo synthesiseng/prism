@@ -43,7 +43,10 @@ const labels = slices.map((slice) => {
   element.className = "label";
   element.role = "listitem";
   element.tabIndex = 0;
-  element.innerHTML = `<span class="value">${formatPercent(slice.value)}</span><span>${slice.name}</span>`;
+  element.append(
+    createTextElement("span", "value", formatPercent(slice.value)),
+    createTextElement("span", undefined, slice.name)
+  );
 
   // Keep the original parent mounted so Prism can restore DOM ownership.
   labelsRoot.appendChild(element);
@@ -191,6 +194,19 @@ function getCanvasElement(id: string): HTMLCanvasElement {
   if (!(element instanceof HTMLCanvasElement)) {
     throw new Error(`#${id} must be a canvas element.`);
   }
+  return element;
+}
+
+function createTextElement(
+  tagName: string,
+  className: string | undefined,
+  text: string
+): HTMLElement {
+  const element = document.createElement(tagName);
+  if (className) {
+    element.className = className;
+  }
+  element.textContent = text;
   return element;
 }
 
