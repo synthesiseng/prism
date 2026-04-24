@@ -33,7 +33,13 @@ importers:
         specifier: ^2.1.8
         version: 2.1.9
 
-  apps/composer-lite:
+  apps/pie-chart:
+    dependencies:
+      '@synthesisengineering/prism':
+        specifier: workspace:*
+        version: link:../..
+
+  apps/react-composer-lite:
     dependencies:
       '@synthesisengineering/prism':
         specifier: workspace:*
@@ -51,12 +57,6 @@ importers:
       '@types/react-dom':
         specifier: ^19.1.2
         version: 19.2.3(@types/react@19.2.14)
-
-  apps/pie-chart:
-    dependencies:
-      '@synthesisengineering/prism':
-        specifier: workspace:*
-        version: link:../..
 
   packages/assets: {}
 
