@@ -16,10 +16,6 @@ body {
   margin: 0;
 }
 
-button {
-  font: inherit;
-}
-
 .page {
   display: grid;
   min-height: 100vh;
@@ -88,6 +84,7 @@ h1 {
   color: #172033;
   background: rgb(255 255 255 / 94%);
   box-shadow: 0 8px 22px rgb(20 31 49 / 14%);
+  cursor: default;
   text-align: center;
 }
 
