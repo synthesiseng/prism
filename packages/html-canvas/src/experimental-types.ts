@@ -2,8 +2,9 @@
  * Canvas 2D context with native HTML-in-Canvas drawing support.
  *
  * @remarks
- * This type models experimental browser APIs and is exposed as an escape hatch
- * for capability checks and advanced integrations.
+ * This internal type models experimental browser APIs used by Prism's native
+ * backend. Applications should use the public `CanvasRuntime` API instead of
+ * calling these browser primitives directly.
  */
 export type HtmlCanvasContext2D = CanvasRenderingContext2D & {
   /**
@@ -27,6 +28,9 @@ export type HtmlCanvasContext2D = CanvasRenderingContext2D & {
 
 /**
  * Canvas element with native HTML-in-Canvas paint support.
+ *
+ * @remarks
+ * This is an internal runtime type for the native backend.
  */
 export type HtmlCanvasElement = HTMLCanvasElement & {
   /**
@@ -42,6 +46,10 @@ export type HtmlCanvasElement = HTMLCanvasElement & {
 
 /**
  * Checks whether a canvas and 2D context expose native HTML-in-Canvas APIs.
+ *
+ * @remarks
+ * This is an internal capability check. Public code should prefer
+ * `CanvasRuntime.backendKind` after constructing a runtime.
  *
  * @param canvas - Canvas element to test.
  * @param context - 2D context created from the canvas.

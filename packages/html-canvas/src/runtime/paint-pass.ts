@@ -20,7 +20,7 @@ import type { SurfaceRegistry } from "./surface-registry";
  * @param api - Paint context and surface drawing controls.
  */
 export type PaintHandler = (api: {
-  ctx: HtmlCanvasContext2D;
+  ctx: CanvasRenderingContext2D;
   time: FrameTime;
   drawSurface: (surface: CanvasSurface) => void;
   invalidate: () => void;

@@ -123,6 +123,30 @@ Undrawn surfaces are inactive for pointer and focus handling until they are draw
 
 ## API
 
+The supported package entry point is:
+
+```ts
+import { CanvasRuntime } from "@synthesisengineering/prism";
+import type {
+  CanvasBackendKind,
+  CanvasBackendPreference,
+  CanvasPoint,
+  CanvasRuntimeOptions,
+  CanvasSurface,
+  PaintHandler,
+  SurfaceBoundsInput,
+  SurfaceOptions,
+  UpdateHandler
+} from "@synthesisengineering/prism";
+```
+
+`CanvasRuntime` is the only constructible public runtime class. `CanvasSurface`
+is returned by `registerSurface()` and may be imported as a type, but
+applications should not construct surfaces directly.
+
+Everything outside the package root is internal. Runtime internals, backend
+classes, and raw HTML-in-Canvas platform wrappers are not public API.
+
 ### Settings
 
 ```ts
@@ -138,7 +162,6 @@ Options:
 ### Properties
 
 - `canvas`
-- `ctx`
 - `width`
 - `height`
 - `pixelRatio`
