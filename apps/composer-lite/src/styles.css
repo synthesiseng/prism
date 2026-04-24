@@ -1,3 +1,5 @@
+/* Foundations ------------------------------------------------------------- */
+
 :root {
   --bg: #080808;
   --chrome-1: #0e0e0e;
@@ -55,6 +57,8 @@ button {
   background: none;
   color: inherit;
 }
+
+/* App Shell --------------------------------------------------------------- */
 
 .app {
   height: 100vh;
@@ -163,6 +167,8 @@ button {
   grid-template-columns: 340px minmax(0, 1fr) 280px;
 }
 
+/* Native Support Gate ----------------------------------------------------- */
+
 .native-gate {
   position: absolute;
   z-index: 50;
@@ -223,6 +229,8 @@ button {
   font-size: 12px;
 }
 
+/* Panels ----------------------------------------------------------------- */
+
 .panel-left,
 .panel-right {
   min-height: 0;
@@ -262,6 +270,8 @@ button {
   letter-spacing: 0.09em;
   text-transform: uppercase;
 }
+
+/* Stage Format And Template Picker --------------------------------------- */
 
 .format-grid {
   display: grid;
@@ -362,6 +372,8 @@ button {
   font-size: 10.5px;
 }
 
+/* Template Thumbnails ----------------------------------------------------- */
+
 .thumb {
   width: 100%;
   height: 100%;
@@ -415,6 +427,8 @@ button {
   padding: 14px;
   color: var(--text-faint);
 }
+
+/* Inspector Controls ------------------------------------------------------ */
 
 .empty-state {
   flex: 1;
@@ -583,6 +597,8 @@ button {
   font-size: 11.5px;
 }
 
+/* Stage Workspace --------------------------------------------------------- */
+
 .stage-area {
   min-width: 0;
   min-height: 0;
@@ -673,23 +689,15 @@ button {
   pointer-events: none;
 }
 
+/* Prism Surface Sources --------------------------------------------------- */
+
 .surface-source {
   position: absolute;
   top: 0;
   left: 0;
   cursor: grab;
+  opacity: 1;
   transform-origin: center center;
-  animation: surfaceIn 360ms var(--ease-out) forwards;
-}
-
-@keyframes surfaceIn {
-  from {
-    opacity: 0;
-  }
-
-  to {
-    opacity: 1;
-  }
 }
 
 .surface-source:active {
@@ -703,6 +711,8 @@ button {
   overflow: hidden;
   border-radius: var(--surface-r, 10px);
 }
+
+/* Selection And Transform Controls --------------------------------------- */
 
 .selection {
   position: absolute;
@@ -826,6 +836,8 @@ button {
   pointer-events: auto;
 }
 
+/* Hero Template ----------------------------------------------------------- */
+
 .tpl-hero {
   width: 100%;
   height: 100%;
@@ -928,6 +940,8 @@ button {
   color: rgba(255, 255, 255, 0.7);
 }
 
+/* Docs Template ----------------------------------------------------------- */
+
 .tpl-docs {
   width: 100%;
   height: 100%;
@@ -998,6 +1012,8 @@ button {
   font-size: 11.5px;
   font-weight: 500;
 }
+
+/* Code Template ----------------------------------------------------------- */
 
 .tpl-code {
   width: 100%;
@@ -1144,6 +1160,8 @@ button {
 .tpl-code .p {
   color: #89ddff;
 }
+
+/* Surface Elevation ------------------------------------------------------- */
 
 .sh-none {
   box-shadow: none;
