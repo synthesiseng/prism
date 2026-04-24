@@ -99,6 +99,12 @@ const surface = runtime.registerSurface(element, {
 });
 ```
 
+Update surface bounds in CSS pixels:
+
+```ts
+surface.setBounds({ x: 24, y: 32, width: 360, height: 220 });
+```
+
 When a surface leaves the runtime:
 
 ```ts
@@ -152,6 +158,14 @@ Options:
 - `clientToCanvasPoint(x, y)`
 - `cssLengthToCanvasPixels(length)`
 - `cssPointToCanvasPixels(point)`
+
+### CanvasSurface
+
+- `element`
+- `isDisposed`
+- `getBounds()`
+- `setBounds(bounds)`
+- `dispose()`
 
 ## Considerations
 

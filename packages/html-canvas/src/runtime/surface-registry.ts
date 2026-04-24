@@ -15,12 +15,14 @@ type SurfaceRecord = {
   readonly domState: SurfaceDomState;
 };
 
+// Internal owner of registered surfaces and DOM round-trip restoration.
 export class SurfaceRegistry {
   private readonly records: SurfaceRecord[] = [];
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
-    private readonly onChange: () => void
+    private readonly onChange: () => void,
+    private readonly onBoundsChange: () => void = onChange
   ) {}
 
   register(element: HTMLElement, options: SurfaceOptions): CanvasSurface {
@@ -29,6 +31,7 @@ export class SurfaceRegistry {
       return existingRecord.surface;
     }
 
+    // Capture the original DOM state before moving the element under the canvas.
     const domState = snapshotSurfaceDomState(element);
     if (element.parentElement !== this.canvas) {
       this.canvas.appendChild(element);
@@ -36,6 +39,9 @@ export class SurfaceRegistry {
 
     const surface = new CanvasSurface(element, options);
     setSurfaceLifecycle(surface, {
+      invalidate: () => {
+        this.onBoundsChange();
+      },
       unregister: (target) => {
         this.unregister(target);
       }
@@ -61,12 +67,14 @@ export class SurfaceRegistry {
       return;
     }
 
+    // Deactivate before restoring so released elements are not left interactive.
     deactivateSurface(record.surface);
     restoreSurfaceDomState(record.surface.element, record.domState);
     this.onChange();
   }
 
   clear(): void {
+    // Copy records first because dispose() unregisters and mutates the registry.
     for (const record of [...this.records]) {
       record.surface.dispose();
     }
@@ -102,6 +110,7 @@ function snapshotSurfaceDomState(element: HTMLElement): SurfaceDomState {
 }
 
 function restoreSurfaceDomState(element: HTMLElement, state: SurfaceDomState): void {
+  // Restore attributes before moving the element back to its original owner.
   restoreAttribute(element, "style", state.style);
   restoreAttribute(element, "aria-label", state.ariaLabel);
   restoreAttribute(element, "data-prism-surface", state.prismSurface);
