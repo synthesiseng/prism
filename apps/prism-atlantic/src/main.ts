@@ -26,6 +26,18 @@ const elements = getAtlanticUiElements();
 const state = createInitialChartState();
 const nativeGate = document.getElementById("native-gate");
 
+// dev-only probe for to check the backend mode
+declare global {
+  interface Window {
+    prismRuntime?: typeof runtime;
+  }
+}
+
+if (import.meta.env.DEV) {
+  window.prismRuntime = runtime;
+  console.info("[Prism] backend:", runtime.backendKind);
+}
+
 // Prism owns the HTML-in-Canvas lifecycle: runtime creation, surface
 // registration, invalidation, paint readiness, and cleanup. Atlantic owns the
 // storm data, projection, interaction state, and the canvas chart drawing.
@@ -198,3 +210,4 @@ function getCanvas(id: string): HTMLCanvasElement {
   }
   return element;
 }
+
