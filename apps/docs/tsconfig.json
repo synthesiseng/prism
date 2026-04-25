@@ -9,6 +9,9 @@
     "noEmit": true,
     "paths": {
       "@/*": ["./*"],
+      "@prism/core": ["../../packages/core/src/index.ts"],
+      "@prism/math": ["../../packages/math/src/index.ts"],
+      "@synthesisengineering/prism": ["../../packages/html-canvas/src/index.ts"],
       "collections/*": ["./.source/*"]
     },
     "plugins": [{ "name": "next" }]

@@ -1,11 +1,27 @@
 ---
 title: Introduction
-description: Prism is a runtime layer for managed HTML-in-Canvas surfaces.
+description: Understand what Prism owns, what your app owns, and why the runtime exists.
 ---
 
-Prism is runtime infrastructure for apps that want real HTML/CSS elements to participate as managed canvas surfaces.
+Prism is runtime infrastructure for native HTML-in-Canvas surfaces.
 
-HTML-in-Canvas is the platform primitive. Prism builds on the WICG HTML-in-Canvas work and provides the runtime layer around surface registration, paint lifecycle, sizing, coordinate conversion, invalidation, paint readiness, export timing, and cleanup.
+Rather than providing a component framework, UI toolkit, state manager, or render model, Prism manages the coordination required to make native HTML-in-Canvas surfaces practical inside real-time canvas applications.
+
+HTML-in-Canvas is the platform primitive. Prism builds on the WICG HTML-in-Canvas work so applications can use managed HTML/CSS surfaces predictably inside canvas workflows.
+
+## Prism's core responsibilities
+
+Your application remains the owner of data, templates, interaction state, and render decisions. Prism handles the surface plumbing:
+
+- **Surface registration:** manages `CanvasSurface` registration against a `CanvasRuntime`.
+- **Paint lifecycle:** coordinates when surfaces are painted and when they are ready to be drawn.
+- **Invalidation management:** tracks when a surface needs repainting so applications do not have to coordinate raw paint state manually.
+- **CSS-pixel bounds:** maintains surface bounds in CSS pixels for placement, sizing, and drawing alignment.
+- **Readiness and cleanup:** tracks paint readiness and disposes of surfaces cleanly when they are no longer needed.
+
+## Why this infrastructure is necessary
+
+The native browser primitive makes it possible to draw HTML/CSS-backed content into canvas. Prism provides the runtime layer around that primitive so applications can use managed surfaces predictably in real-time canvas workflows.
 
 ## Current scope
 
@@ -19,4 +35,3 @@ Native HTML-in-Canvas currently requires a Chromium-based browser with the Canva
 - [Installation](/docs/tutorials/installation)
 - [Mental Model](/docs/tutorials/mental-model)
 - [API](/docs/reference/api)
-
