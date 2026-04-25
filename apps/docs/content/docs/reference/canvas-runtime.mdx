@@ -19,6 +19,9 @@ const runtime = new CanvasRuntime(canvas, {
 - `pixelRatio`
 - `backendKind`
 
+`width` and `height` are CSS pixels. Direct drawing with `ctx` inside
+`onPaint()` uses canvas backing-store pixels.
+
 ## Methods
 
 - `registerSurface(element, options)`
@@ -37,7 +40,9 @@ const runtime = new CanvasRuntime(canvas, {
 ## Paint
 
 ```ts
-runtime.onPaint(({ drawSurface }) => {
+runtime.onPaint(({ ctx, drawSurface }) => {
+  const size = runtime.cssLengthToCanvasPixels(24);
+  ctx.fillRect(0, 0, size, size);
   drawSurface(surface);
 });
 ```

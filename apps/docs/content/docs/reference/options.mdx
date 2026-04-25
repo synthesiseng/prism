@@ -24,15 +24,23 @@ type SurfaceOptions = {
 
 ## SurfaceBoundsInput
 
-Bounds are CSS pixels.
+Bounds are CSS pixels. A surface can use a static bounds object or a function
+that returns the current bounds.
 
 ```ts
-type SurfaceBoundsInput = {
+type SurfaceBoundsInput =
+  | {
+      x: number;
+      y: number;
+      width: number;
+      height: number;
+    }
+  | (() => {
   x: number;
   y: number;
   width: number;
   height: number;
-};
+});
 ```
 
 ## Handlers
@@ -40,11 +48,23 @@ type SurfaceBoundsInput = {
 ```ts
 type PaintHandler = (event: {
   ctx: CanvasRenderingContext2D;
+  time: {
+    now: number;
+    delta: number;
+    frame: number;
+  };
   drawSurface(surface: CanvasSurface): void;
+  invalidate(): void;
 }) => void;
 
-type UpdateHandler = (time: number) => void;
+type UpdateHandler = (time: {
+  now: number;
+  delta: number;
+  frame: number;
+}) => void;
 ```
+
+`now` and `delta` are seconds. `frame` is a monotonic frame counter.
 
 ## CanvasPoint
 
