@@ -1,0 +1,13 @@
+{
+  "name": "@prism/example-atlantic",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 127.0.0.1",
+    "build": "tsc --noEmit -p tsconfig.json && vite build",
+    "preview": "vite preview --host 127.0.0.1"
+  },
+  "dependencies": {
+    "@synthesisengineering/prism": "workspace:*"
+  }
+}
