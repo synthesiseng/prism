@@ -1,0 +1,22 @@
+---
+title: Introduction
+description: Prism is a runtime layer for managed HTML-in-Canvas surfaces.
+---
+
+Prism is runtime infrastructure for apps that want real HTML/CSS elements to participate as managed canvas surfaces.
+
+HTML-in-Canvas is the platform primitive. Prism builds on the WICG HTML-in-Canvas work and provides the runtime layer around surface registration, paint lifecycle, sizing, coordinate conversion, invalidation, paint readiness, export timing, and cleanup.
+
+## Current scope
+
+Prism v1 is 2D-first. WebGL and WebGPU integration are future work, not the center of the current API.
+
+Native HTML-in-Canvas currently requires a Chromium-based browser with the Canvas Draw Element flag enabled. Fallback mode is compatibility-only and lower fidelity; it does not define the public API.
+
+## Start here
+
+- [Quickstart](/docs/tutorials/quickstart)
+- [Installation](/docs/tutorials/installation)
+- [Mental Model](/docs/tutorials/mental-model)
+- [API](/docs/reference/api)
+

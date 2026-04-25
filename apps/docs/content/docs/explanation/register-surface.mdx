@@ -1,0 +1,25 @@
+---
+title: registerSurface()
+description: Register an app-owned HTML element as a Prism-managed canvas surface.
+---
+
+`registerSurface()` creates a `CanvasSurface` facade for an app-owned DOM element.
+
+```ts
+const surface = runtime.registerSurface(element, {
+  bounds: { x: 0, y: 0, width: 320, height: 180 }
+});
+```
+
+The app still owns the element's content, component tree, and styles. Prism owns the runtime registration and paint integration for that element.
+
+Surface bounds are CSS pixels. Direct canvas drawing inside paint handlers uses backing-store pixels.
+
+```ts
+runtime.onPaint(({ drawSurface }) => {
+  drawSurface(surface);
+});
+```
+
+`CanvasSurface` instances belong to the runtime that created them.
+

@@ -1,0 +1,30 @@
+---
+title: CanvasSurface
+description: The public surface facade returned by registerSurface().
+---
+
+`CanvasSurface` is a facade returned by `registerSurface()`. Apps should not construct it.
+
+```ts
+const surface = runtime.registerSurface(element, {
+  bounds: { x: 24, y: 32, width: 360, height: 220 }
+});
+```
+
+## Surface API
+
+- `element`
+- `isDisposed`
+- `getBounds()`
+- `setBounds(bounds)`
+- `dispose()`
+
+Surface bounds are CSS pixels. Use `setBounds()` when layout changes; do not reach into backend or native implementation details.
+
+```ts
+surface.setBounds({ x: 48, y: 64, width: 420, height: 240 });
+surface.dispose();
+```
+
+Disposing a surface unregisters it from the runtime and restores Prism-owned DOM state.
+

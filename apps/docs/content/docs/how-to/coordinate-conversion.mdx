@@ -1,0 +1,28 @@
+---
+title: Convert coordinates
+description: Convert between client, CSS-pixel, and backing-store canvas coordinates.
+---
+
+Surface bounds and input coordinates are CSS pixels.
+
+```ts
+const point = runtime.clientToCanvasPoint(event.clientX, event.clientY);
+```
+
+Direct drawing with `ctx` inside `onPaint()` uses backing-store pixels. Use runtime helpers when you mix surface drawing with raw canvas drawing:
+
+```ts
+runtime.onPaint(({ ctx, drawSurface }) => {
+  drawSurface(surface);
+
+  const size = runtime.cssLengthToCanvasPixels(24);
+  ctx.fillRect(0, 0, size, size);
+});
+```
+
+Keep this boundary explicit:
+
+- surface bounds: CSS pixels
+- pointer/client conversion: CSS pixels
+- direct `ctx` drawing: backing-store pixels
+

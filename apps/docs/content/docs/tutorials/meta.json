@@ -1,4 +1,4 @@
 {
-  "title": "Tutorials",
-  "pages": ["first-surface"]
+  "title": "Getting Started",
+  "pages": ["introduction", "quickstart", "installation", "mental-model"]
 }
