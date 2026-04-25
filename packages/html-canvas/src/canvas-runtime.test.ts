@@ -158,7 +158,7 @@ class FakeCanvasContext {
     y: number,
     width?: number,
     height?: number
-  ) => DOMMatrix;
+  ) => DOMMatrix | null;
 
   fillStyle = "";
   strokeStyle = "";
@@ -694,6 +694,30 @@ describe("CanvasRuntime", () => {
           height: 80
         }
       ]);
+
+      runtime.destroy();
+    });
+
+    it("falls back to CSS bounds when native drawElementImage returns no transform", () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      canvas.context.drawElementImage = (element, x, y, width, height) => {
+        canvas.context.drawElementImageCalls.push({ element, x, y, width, height });
+        return null;
+      };
+      const element = document.createElement("section");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 10, y: 20, width: 30, height: 40 }
+      });
+
+      runtime.onPaint(({ drawSurface }) => {
+        drawSurface(surface);
+      });
+
+      canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+
+      expect(element.style.transform).toBe("matrix(1, 0, 0, 1, 10, 20)");
 
       runtime.destroy();
     });
