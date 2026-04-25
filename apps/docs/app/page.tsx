@@ -1,18 +1,17 @@
 import Link from "next/link";
+import { PrismHomeDemo } from "@/components/prism-home-demo";
 import { PrismDocsSidebar } from "./prism-docs-sidebar";
 import { PrismTopNav } from "./prism-top-nav";
-
-const runtimeSteps = ["registerSurface", "onPaint", "paintOnce", "cleanup"] as const;
 
 const ownership = {
   app: ["state", "data", "templates", "transforms", "rendering decisions", "interaction state"],
   prism: [
     "CanvasRuntime",
-    "surface registration",
+    "CanvasSurface registration",
     "paint lifecycle",
     "invalidation",
     "CSS-pixel bounds",
-    "readiness",
+    "paint readiness",
     "cleanup"
   ]
 } as const;
@@ -86,59 +85,7 @@ export default function HomePage() {
               </pre>
             </div>
 
-            <div className="prism-canvas-frame" aria-label="Prism canvas surface diagram">
-              <div className="prism-canvas-topbar">
-                <span>&lt;canvas&gt; · 720 × 360</span>
-                <span>dpr 2.0</span>
-              </div>
-              <div className="prism-canvas-body">
-                <svg
-                  aria-hidden="true"
-                  className="prism-canvas-trace"
-                  viewBox="0 0 720 380"
-                  preserveAspectRatio="none"
-                >
-                  <defs>
-                    <linearGradient id="prism-trace" x1="0" x2="1" y1="0" y2="0">
-                      <stop offset="0%" stopColor="#7c5cff" stopOpacity="0" />
-                      <stop offset="45%" stopColor="#7c5cff" stopOpacity="0.76" />
-                      <stop offset="100%" stopColor="#22d3ee" stopOpacity="0.78" />
-                    </linearGradient>
-                    <linearGradient id="prism-fill" x1="0" x2="0" y1="0" y2="1">
-                      <stop offset="0%" stopColor="#7c5cff" stopOpacity="0.18" />
-                      <stop offset="100%" stopColor="#7c5cff" stopOpacity="0" />
-                    </linearGradient>
-                  </defs>
-                  <path
-                    d="M0,300 C120,260 200,200 320,210 C440,220 520,140 640,130 C690,128 720,150 720,150 L720,380 L0,380 Z"
-                    fill="url(#prism-fill)"
-                  />
-                  <path
-                    d="M0,300 C120,260 200,200 320,210 C440,220 520,140 640,130 C690,128 720,150 720,150"
-                    fill="none"
-                    stroke="url(#prism-trace)"
-                    strokeWidth="2"
-                  />
-                </svg>
-                <div className="prism-surface-card surface-title">
-                  <strong>HTML title</strong>
-                  <span>managed surface</span>
-                </div>
-                <div className="prism-surface-card surface-tooltip">
-                  <strong>Tooltip</strong>
-                  <span>CSS pixels · app-owned content</span>
-                </div>
-                <div className="prism-surface-card surface-panel">
-                  <strong>Detail panel</strong>
-                  <span>drawSurface(surface)</span>
-                </div>
-                <div className="prism-canvas-status">
-                  {runtimeSteps.map((step) => (
-                    <span key={step}>{step}</span>
-                  ))}
-                </div>
-              </div>
-            </div>
+            <PrismHomeDemo />
           </div>
 
           <section className="prism-home-section">
@@ -147,7 +94,7 @@ export default function HomePage() {
               <h2>What Prism owns</h2>
               <span>
                 Prism is a runtime, not a framework. It manages surfaces, paint,
-                and export timing and stays out of your render decisions.
+                and timing and stays out of your render decisions.
               </span>
             </div>
 
