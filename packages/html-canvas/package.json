@@ -14,7 +14,7 @@
     "@prism/math": "workspace:*"
   },
   "scripts": {
-    "build": "tsc -b",
-    "typecheck": "tsc -b --pretty false"
+    "build": "tsc -b tsconfig.build.json",
+    "typecheck": "tsc -b tsconfig.build.json --pretty false"
   }
 }
