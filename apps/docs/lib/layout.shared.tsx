@@ -5,6 +5,12 @@ export function baseOptions(): BaseLayoutProps {
     nav: {
       title: "Prism"
     },
+    searchToggle: {
+      enabled: false
+    },
+    themeSwitch: {
+      enabled: false
+    },
     links: [
       {
         text: "GitHub",

@@ -1,0 +1,30 @@
+---
+title: CanvasRuntime
+description: The public runtime class that owns Prism's canvas lifecycle.
+---
+
+`CanvasRuntime` is the only constructible public runtime class.
+
+```ts
+import { CanvasRuntime } from "@synthesisengineering/prism";
+
+const runtime = new CanvasRuntime(canvas, { backend: "auto" });
+```
+
+The runtime owns the canvas association, backend selection, surface registry, paint lifecycle, invalidation, update handlers, paint handlers, coordinate helpers, and cleanup.
+
+It does not own app state, chart data, template data, React state, game state, or example-specific transforms.
+
+## Core methods
+
+- `registerSurface(element, options)`
+- `onPaint(handler)`
+- `onUpdate(handler)`
+- `paintOnce()`
+- `start()`
+- `stop()`
+- `destroy()`
+- coordinate conversion helpers
+
+Use the package root import. Backend classes, platform wrappers, paint-pass helpers, and runtime internals are not public API.
+

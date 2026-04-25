@@ -33,20 +33,27 @@ It builds on the HTML-in-Canvas proposal and related WICG work. The platform pro
 
 ## Start here
 
-- [Create your first surface](/docs/tutorials/first-surface)
-- [Understand the core concepts](/docs/explanation/concepts)
+- [Quickstart](/docs/tutorials/quickstart)
+- [Installation](/docs/tutorials/installation)
+- [Mental Model](/docs/tutorials/mental-model)
 - [Export a PNG](/docs/how-to/export-png)
-- [See the examples](/docs/examples)
+- [See the examples](/docs/examples/prism-atlantic)
 - [Read the API reference](/docs/reference/api)
 
 ## Current scope
 
 Prism v1 is 2D-first. WebGL and WebGPU integration are future work, not the current center of the library.
 
-Native HTML-in-Canvas currently requires a Chromium build with the flag enabled:
+Native HTML-in-Canvas currently requires a Chromium-based browser build with the Canvas Draw Element flag enabled. Chrome uses:
 
 ```txt
 chrome://flags/#canvas-draw-element
+```
+
+Brave uses:
+
+```txt
+brave://flags/#canvas-draw-element
 ```
 
 Fallback exists only as a lower-fidelity compatibility path. It does not define the public API and is not equivalent to native HTML rendering.

@@ -1,0 +1,37 @@
+---
+title: Mental Model
+description: What Prism owns, and what remains app-owned.
+---
+
+Prism is a runtime layer, not an app framework.
+
+## Prism owns
+
+- `CanvasRuntime`
+- `CanvasSurface` registration
+- backend selection
+- paint lifecycle
+- invalidation
+- CSS-pixel surface bounds
+- backing-store conversion helpers
+- paint readiness
+- export timing
+- surface cleanup
+
+## Your app owns
+
+- app state
+- data
+- templates and components
+- transforms
+- layout decisions
+- chart, game, or rendering logic
+- UI decisions
+- interaction state
+
+`CanvasRuntime` is the only constructible public runtime class. `CanvasSurface` instances are returned by `registerSurface()` and should not be constructed by apps.
+
+## Coordinate boundary
+
+Surface bounds and input coordinates are CSS pixels. Direct `ctx` drawing inside `onPaint()` uses backing-store pixels.
+

@@ -1,0 +1,55 @@
+---
+title: Quickstart
+description: Install Prism, register one HTML element, and draw it into a canvas paint pass.
+---
+
+Prism is a runtime layer for managed HTML-in-Canvas surfaces. HTML-in-Canvas is the platform primitive; Prism builds on it and owns the runtime work around registration, painting, sizing, readiness, and cleanup.
+
+For native HTML-in-Canvas rendering, enable the Canvas Draw Element flag in Chrome or Brave. See [Installation](/docs/tutorials/installation).
+
+## Install
+
+```sh
+npm i @synthesisengineering/prism
+```
+
+## Add a canvas and element
+
+```html
+<canvas id="canvas"></canvas>
+<div id="card">Hello from HTML</div>
+```
+
+The app owns the DOM element and its content. Prism owns the runtime surface lifecycle once the element is registered.
+
+## Register and paint
+
+```ts
+import { CanvasRuntime } from "@synthesisengineering/prism";
+
+const canvas = document.querySelector<HTMLCanvasElement>("#canvas");
+const element = document.querySelector<HTMLElement>("#card");
+
+if (!canvas || !element) {
+  throw new Error("Missing canvas or surface element.");
+}
+
+const runtime = new CanvasRuntime(canvas, { backend: "auto" });
+const surface = runtime.registerSurface(element, {
+  bounds: { x: 0, y: 0, width: 320, height: 180 }
+});
+
+runtime.onPaint(({ drawSurface }) => {
+  drawSurface(surface);
+});
+
+runtime.start();
+```
+
+Surface bounds are CSS pixels. Direct drawing with `ctx` inside `onPaint()` uses backing-store pixels.
+
+## Next
+
+- [Mental Model](/docs/tutorials/mental-model)
+- [CanvasRuntime](/docs/explanation/canvas-runtime)
+- [Export a PNG](/docs/how-to/export-png)
