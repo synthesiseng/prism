@@ -3,7 +3,7 @@
   "references": [
     { "path": "./packages/math" },
     { "path": "./packages/core" },
-    { "path": "./packages/html-canvas" },
+    { "path": "./packages/html-canvas/tsconfig.build.json" },
     { "path": "./packages/assets" },
     { "path": "./packages/input" },
     { "path": "./packages/scene" },
