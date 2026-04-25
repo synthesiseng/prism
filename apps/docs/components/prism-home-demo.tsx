@@ -4,6 +4,13 @@ import { CanvasRuntime, type CanvasSurface } from "@synthesisengineering/prism";
 import { useEffect, useRef, useState } from "react";
 
 const paintSteps = ["registered", "paintOnce()", "ready"] as const;
+const samplePoints: ReadonlyArray<readonly [number, number]> = [
+  [60, 280],
+  [180, 225],
+  [320, 210],
+  [460, 180],
+  [600, 140]
+] as const;
 
 type DemoMode = "preview" | "native";
 type DemoSurfaceSet = Readonly<{
@@ -329,14 +336,8 @@ function DemoTrace() {
         strokeOpacity="0.45"
         strokeWidth="1"
       />
-      {[
-        [60, 280],
-        [180, 225],
-        [320, 210],
-        [460, 180],
-        [600, 140]
-      ].map(([x, y]) => (
-        <g key={`${x}-${y}`}>
+      {samplePoints.map(([x, y]) => (
+        <g key={`${String(x)}-${String(y)}`}>
           <circle cx={x} cy={y} r="3" fill="#7c5cff" />
           <circle cx={x} cy={y} r="6" fill="none" stroke="#7c5cff" strokeOpacity="0.3" />
         </g>
@@ -441,14 +442,6 @@ function drawTrace(ctx: CanvasRenderingContext2D, width: number, height: number)
   ctx.lineTo(720, 180);
   ctx.stroke();
   ctx.setLineDash([]);
-
-  const samplePoints: ReadonlyArray<readonly [number, number]> = [
-    [60, 280],
-    [180, 225],
-    [320, 210],
-    [460, 180],
-    [600, 140]
-  ];
 
   for (const [x, y] of samplePoints) {
     ctx.beginPath();
