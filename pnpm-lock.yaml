@@ -39,6 +39,12 @@ importers:
         specifier: workspace:*
         version: link:../..
 
+  apps/prism-atlantic:
+    dependencies:
+      '@synthesisengineering/prism':
+        specifier: workspace:*
+        version: link:../..
+
   apps/react-composer-lite:
     dependencies:
       '@synthesisengineering/prism':

@@ -10,6 +10,7 @@ export default tseslint.config(
       "**/node_modules/**",
       "eslint.config.js",
       "scripts/*.mjs",
+      "apps/*/scripts/*.mjs",
       "prettier.config.cjs",
       "vitest.config.ts"
     ]
@@ -24,10 +25,7 @@ export default tseslint.config(
       }
     },
     rules: {
-      "@typescript-eslint/consistent-type-imports": [
-        "error",
-        { "prefer": "type-imports" }
-      ],
+      "@typescript-eslint/consistent-type-imports": ["error", { prefer: "type-imports" }],
       "@typescript-eslint/no-confusing-void-expression": "off",
       "@typescript-eslint/no-non-null-assertion": "off",
       "tsdoc/syntax": "error"

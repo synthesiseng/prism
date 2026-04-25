@@ -12,6 +12,9 @@ coverage/
 *.tgz
 *.log
 
+# Generated example data
+apps/prism-atlantic/src/data/hurdat2-atlantic.json
+
 # OS files
 .DS_Store
 Thumbs.db

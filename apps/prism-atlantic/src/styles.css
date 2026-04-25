@@ -1,0 +1,671 @@
+:root {
+  --bg: #050a12;
+  --bg-2: #060e18;
+  --ink-0: rgba(255, 255, 255, 1);
+  --ink-1: rgba(255, 255, 255, 0.86);
+  --ink-2: rgba(255, 255, 255, 0.62);
+  --ink-3: rgba(255, 255, 255, 0.38);
+  --ink-4: rgba(255, 255, 255, 0.18);
+  --hair: rgba(255, 255, 255, 0.1);
+  --hair-strong: rgba(255, 255, 255, 0.18);
+
+  --c-ts: #4dd9c0;
+  --c-c2: #f5a623;
+  --c-c4: #ff6b6b;
+  --c-c5: #ff2d55;
+
+  --mono: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --sans: "Inter", system-ui, -apple-system, Segoe UI, sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+html,
+body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink-1);
+  font-family: var(--sans);
+  overflow: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* The root composes: a deep ocean bg, a canvas for tracks, then HTML surfaces. */
+#stage {
+  position: fixed;
+  inset: 0;
+  background:
+    radial-gradient(ellipse 70% 55% at 35% 45%, rgba(20, 50, 70, 0.22), transparent 70%),
+    radial-gradient(ellipse 60% 50% at 65% 60%, rgba(30, 40, 90, 0.16), transparent 75%),
+    var(--bg);
+}
+
+/* very subtle film grain - keeps the dark from looking flat */
+#stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: radial-gradient(rgba(255, 255, 255, 0.018) 1px, transparent 1px);
+  background-size: 3px 3px;
+  mix-blend-mode: screen;
+  opacity: 0.6;
+}
+
+canvas#viz {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.native-gate {
+  position: absolute;
+  z-index: 20;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  padding: 28px;
+  background: rgba(5, 10, 18, 0.72);
+  backdrop-filter: blur(10px);
+}
+
+.native-gate[hidden] {
+  display: none;
+}
+
+.native-gate-card {
+  max-width: 520px;
+  border: 1px solid var(--hair-strong);
+  border-radius: 10px;
+  padding: 24px;
+  background: rgba(5, 10, 18, 0.9);
+  box-shadow: 0 30px 90px -30px rgba(0, 0, 0, 0.85);
+}
+
+.native-gate-eyebrow {
+  margin-bottom: 10px;
+  color: #4dd9c0;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.native-gate h1 {
+  margin: 0;
+  color: var(--ink-0);
+  font-size: 26px;
+  letter-spacing: -0.03em;
+  line-height: 1.08;
+}
+
+.native-gate p {
+  margin: 12px 0 16px;
+  color: var(--ink-2);
+  line-height: 1.55;
+}
+
+.native-gate code {
+  display: block;
+  border: 1px solid var(--hair);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink-1);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+/* ---------------- Surfaces ---------------- */
+
+.surface {
+  position: absolute;
+  background: rgba(5, 10, 18, 0.78);
+  border: 1px solid var(--hair);
+  backdrop-filter: blur(14px) saturate(120%);
+  -webkit-backdrop-filter: blur(14px) saturate(120%);
+  box-shadow:
+    0 1px 0 rgba(255, 255, 255, 0.04) inset,
+    0 24px 60px -30px rgba(0, 0, 0, 0.8);
+  color: var(--ink-1);
+  user-select: none;
+  z-index: 5;
+}
+
+/* Metric readout - top center-left */
+#metric {
+  top: 28px;
+  left: 28px;
+  padding: 14px 18px 12px;
+  border-radius: 8px;
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
+  letter-spacing: 0.04em;
+  min-width: 280px;
+}
+#metric .label {
+  color: var(--ink-3);
+  text-transform: uppercase;
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+#metric .label .pulse {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #4dd9c0;
+  box-shadow: 0 0 8px rgba(77, 217, 192, 0.9);
+  animation: pulse 2.4s ease-in-out infinite;
+}
+@keyframes pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.85);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1.1);
+  }
+}
+#metric .row {
+  display: flex;
+  justify-content: space-between;
+  gap: 24px;
+  color: var(--ink-1);
+  white-space: nowrap;
+}
+#metric .row .k {
+  white-space: nowrap;
+}
+#metric .row + .row {
+  margin-top: 3px;
+}
+#metric .row .k {
+  color: var(--ink-3);
+}
+#metric .row .v {
+  color: var(--ink-1);
+}
+#metric .v.accent {
+  color: #cfe9e0;
+}
+#metric .divider {
+  height: 1px;
+  background: var(--hair);
+  margin: 10px 0 8px;
+}
+#metric .title {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 13px;
+  letter-spacing: 0.01em;
+  color: var(--ink-0);
+  margin-bottom: 1px;
+}
+#metric .sub {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-2);
+  letter-spacing: 0.05em;
+  margin-bottom: 10px;
+}
+
+/* Legend - bottom left */
+#legend {
+  bottom: 28px;
+  left: 28px;
+  padding: 14px 16px 12px;
+  border-radius: 8px;
+  min-width: 220px;
+}
+#legend .label {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  margin-bottom: 10px;
+}
+#legend ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+#legend li {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 4px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 120ms ease;
+}
+#legend li:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+#legend .swatch {
+  position: relative;
+  width: 22px;
+  height: 4px;
+  border-radius: 2px;
+  flex: 0 0 22px;
+}
+#legend .swatch::before {
+  content: "";
+  position: absolute;
+  inset: -5px -8px;
+  border-radius: 12px;
+  filter: blur(6px);
+  opacity: 0.7;
+  background: inherit;
+}
+#legend .swatch.s0 {
+  background: #4dd9c0;
+}
+#legend .swatch.s1 {
+  background: #4dd9c0;
+}
+#legend .swatch.s2 {
+  background: #f5a623;
+}
+#legend .swatch.s3 {
+  background: #f5a623;
+}
+#legend .swatch.s4 {
+  background: #ff6b6b;
+}
+#legend .swatch.s5 {
+  background: #ff2d55;
+}
+#legend .name {
+  font-family: var(--sans);
+  font-size: 11.5px;
+  color: var(--ink-1);
+  letter-spacing: 0.01em;
+  flex: 1;
+}
+#legend .count {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+}
+
+/* Export button - top right */
+#export {
+  top: 28px;
+  right: 28px;
+  padding: 9px 14px 9px 12px;
+  border-radius: 6px;
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-1);
+  background: rgba(5, 10, 18, 0.6);
+  border: 1px solid var(--hair-strong);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  transition:
+    background 160ms ease,
+    border-color 160ms ease,
+    color 160ms ease;
+}
+#export:hover {
+  background: rgba(15, 30, 45, 0.7);
+  border-color: rgba(255, 255, 255, 0.32);
+  color: var(--ink-0);
+}
+#export svg {
+  width: 12px;
+  height: 12px;
+}
+#export.busy {
+  opacity: 0.55;
+  pointer-events: none;
+}
+
+/* Brand mark - top center */
+#brand {
+  position: absolute;
+  top: 32px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
+  text-align: center;
+  pointer-events: none;
+}
+#brand .mark {
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.36em;
+  color: var(--ink-2);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+#brand .sub {
+  white-space: nowrap;
+}
+#brand .mark .dot {
+  color: #4dd9c0;
+  margin: 0 6px;
+}
+#brand .sub {
+  font-family: var(--sans);
+  font-weight: 300;
+  font-size: 10.5px;
+  letter-spacing: 0.05em;
+  color: var(--ink-3);
+  margin-top: 4px;
+}
+
+/* Footer caption */
+#caption {
+  position: absolute;
+  bottom: 28px;
+  right: 28px;
+  z-index: 4;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  color: var(--ink-3);
+  text-transform: uppercase;
+  line-height: 1.7;
+  pointer-events: none;
+}
+#caption .strong {
+  color: var(--ink-2);
+}
+
+/* Tooltip */
+#tooltip {
+  position: absolute;
+  pointer-events: none;
+  padding: 10px 12px 11px;
+  border-radius: 6px;
+  background: rgba(5, 10, 18, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  min-width: 180px;
+  transform: translate(14px, -50%);
+  opacity: 0;
+  transition: opacity 100ms ease;
+  z-index: 6;
+  box-shadow: 0 12px 30px -12px rgba(0, 0, 0, 0.7);
+}
+#tooltip.show {
+  opacity: 1;
+}
+#tooltip .row1 {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 6px;
+}
+#tooltip .name {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 12px;
+  color: var(--ink-0);
+  letter-spacing: 0.01em;
+}
+#tooltip .badge {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 2px 6px;
+  border-radius: 3px;
+  color: rgba(5, 10, 18, 0.95);
+  font-weight: 600;
+}
+#tooltip .data {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 12px;
+  font-family: var(--mono);
+  font-size: 10px;
+  letter-spacing: 0.04em;
+}
+#tooltip .data .k {
+  color: var(--ink-3);
+}
+#tooltip .data .v {
+  color: var(--ink-1);
+  text-align: right;
+}
+
+/* Detail panel */
+#panel {
+  position: absolute;
+  top: 28px;
+  right: 28px;
+  width: 300px;
+  padding: 22px 22px 24px;
+  border-radius: 10px;
+  background: rgba(5, 10, 18, 0.86);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(16px) saturate(120%);
+  -webkit-backdrop-filter: blur(16px) saturate(120%);
+  box-shadow: 0 30px 80px -20px rgba(0, 0, 0, 0.8);
+  z-index: 7;
+  transform: translateX(calc(100% + 60px));
+  opacity: 0;
+  transition:
+    transform 380ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    opacity 220ms ease;
+  pointer-events: none;
+}
+#panel.open {
+  transform: translateX(0);
+  opacity: 1;
+  pointer-events: auto;
+}
+#panel .x {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 22px;
+  height: 22px;
+  border-radius: 4px;
+  background: transparent;
+  border: 1px solid var(--hair);
+  color: var(--ink-2);
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1;
+  transition:
+    background 120ms,
+    color 120ms,
+    border-color 120ms;
+}
+#panel .x:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: var(--ink-0);
+  border-color: var(--hair-strong);
+}
+#panel .eyebrow {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+#panel h2.name {
+  font-family: var(--sans);
+  font-weight: 600;
+  font-size: 28px;
+  line-height: 1.05;
+  letter-spacing: -0.01em;
+  color: var(--ink-0);
+  margin: 0 0 6px;
+  text-wrap: pretty;
+}
+#panel .season {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--ink-2);
+  letter-spacing: 0.04em;
+  margin-bottom: 14px;
+}
+#panel .badge-row {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 18px;
+  flex-wrap: wrap;
+}
+#panel .badge {
+  font-family: var(--mono);
+  font-size: 9.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  padding: 4px 7px;
+  border-radius: 3px;
+  color: rgba(5, 10, 18, 0.95);
+  font-weight: 600;
+}
+#panel .stats {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px 12px;
+  margin-bottom: 18px;
+}
+#panel .stat {
+  border-top: 1px solid var(--hair);
+  padding-top: 8px;
+}
+#panel .stat .k {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 4px;
+}
+#panel .stat .v {
+  font-family: var(--mono);
+  font-size: 14px;
+  color: var(--ink-0);
+  letter-spacing: 0.02em;
+}
+#panel .stat .v small {
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  margin-left: 3px;
+}
+#panel .timeline-label {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 8px;
+  display: flex;
+  justify-content: space-between;
+}
+#panel .timeline {
+  position: relative;
+  height: 60px;
+  border-bottom: 1px solid var(--hair);
+  margin-bottom: 4px;
+}
+#panel .timeline svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+#panel .timeline-axis {
+  display: flex;
+  justify-content: space-between;
+  font-family: var(--mono);
+  font-size: 9px;
+  color: var(--ink-3);
+  letter-spacing: 0.04em;
+  margin-bottom: 14px;
+}
+#panel .landfalls .k {
+  font-family: var(--mono);
+  font-size: 9px;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  margin-bottom: 6px;
+}
+#panel .landfalls .list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+#panel .landfalls .chip {
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--ink-1);
+  padding: 3px 8px;
+  border: 1px solid var(--hair);
+  border-radius: 99px;
+}
+#panel .landfalls .none {
+  font-family: var(--sans);
+  font-size: 11px;
+  color: var(--ink-3);
+  font-style: italic;
+}
+
+/* Faint scanline framing - almost imperceptible window for the export crop */
+#stage::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 8;
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+/* Prism surface placement ------------------------------------------------- */
+
+/*
+  The prototype positioned these elements with normal DOM top/right/bottom
+  rules. In the Prism version, TypeScript sets CSS-pixel surface bounds and the
+  runtime synchronizes DOM transforms after each paint.
+*/
+#brand,
+#caption,
+#export,
+#metric,
+#legend,
+#tooltip,
+#panel {
+  top: auto;
+  right: auto;
+  bottom: auto;
+  left: auto;
+  transform: none;
+}
+
+#surface-root {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
