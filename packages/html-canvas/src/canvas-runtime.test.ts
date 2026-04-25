@@ -1376,14 +1376,90 @@ describe("CanvasRuntime", () => {
       });
 
       expect(canvas.onpaint).not.toBeNull();
+      expect(canvas.getAttribute("layoutsubtree")).toBe("");
       expect(element.parentElement).toBe(canvas);
 
       runtime.destroy();
 
       expect(canvas.onpaint).toBeNull();
+      expect(canvas.getAttribute("layoutsubtree")).toBeNull();
       expect(surface.isDisposed).toBe(true);
       expect(parent.children).toEqual([element]);
       expect(element.getAttribute("style")).toBeNull();
+    });
+
+    it("preserves app-authored layoutsubtree state when destroyed", () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      canvas.setAttribute("layoutsubtree", "app-owned");
+
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+      runtime.destroy();
+
+      expect(canvas.getAttribute("layoutsubtree")).toBe("app-owned");
+    });
+
+    it("is idempotent and safe after stop", () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+      runtime.stop();
+
+      expect(() => {
+        runtime.destroy();
+        runtime.destroy();
+      }).not.toThrow();
+      expect(canvas.onpaint).toBeNull();
+      expect(canvas.getAttribute("layoutsubtree")).toBeNull();
+    });
+
+    it("keeps stop idempotent and safe after destroy", () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+      expect(() => {
+        runtime.stop();
+        runtime.stop();
+        runtime.destroy();
+        runtime.stop();
+        runtime.stop();
+      }).not.toThrow();
+    });
+
+    it("does not accept new runtime work after destroy", async () => {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const element = document.createElement("section");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+
+      runtime.destroy();
+
+      expect(() => {
+        runtime.start();
+      }).toThrow("Cannot start a destroyed CanvasRuntime. Create a new CanvasRuntime instead.");
+      expect(() => {
+        runtime.onPaint(() => {});
+      }).toThrow(
+        "Cannot register a paint handler on a destroyed CanvasRuntime. Create a new CanvasRuntime instead."
+      );
+      expect(() => {
+        runtime.onUpdate(() => {});
+      }).toThrow(
+        "Cannot register an update handler on a destroyed CanvasRuntime. Create a new CanvasRuntime instead."
+      );
+      expect(() => {
+        runtime.registerSurface(element as unknown as HTMLElement, {
+          bounds: { x: 0, y: 0, width: 100, height: 50 }
+        });
+      }).toThrow(
+        "Cannot register a surface with a destroyed CanvasRuntime. Create a new CanvasRuntime instead."
+      );
+      await expect(runtime.paintOnce()).rejects.toThrow(
+        "Cannot paint a destroyed CanvasRuntime. Create a new CanvasRuntime instead."
+      );
     });
   });
 });
