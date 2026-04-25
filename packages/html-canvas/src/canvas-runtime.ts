@@ -157,6 +157,7 @@ export class CanvasRuntime {
   private paintWaiters: PaintWaiter[] = [];
   private fallbackPaintScheduled = false;
   private nativePaintRequestedForWaiters = false;
+  private readonly ownsNativeLayoutSubtree: boolean;
   private metrics: CanvasMetrics = {
     cssWidth: 0,
     cssHeight: 0,
@@ -188,7 +189,9 @@ export class CanvasRuntime {
 
     this.ctx = ctx as HtmlCanvasContext2D;
     this.backend = selectRuntimeBackend(canvas, ctx, options.backend);
-    if (this.backend.kind === "native") {
+    this.ownsNativeLayoutSubtree =
+      this.backend.kind === "native" && this.canvas.getAttribute("layoutsubtree") === null;
+    if (this.ownsNativeLayoutSubtree) {
       this.canvas.setAttribute("layoutsubtree", "");
     }
     this.surfaces = new SurfaceRegistry(
@@ -286,9 +289,7 @@ export class CanvasRuntime {
    * @throws Error when called after the runtime is destroyed.
    */
   registerSurface(element: HTMLElement, options: SurfaceOptions): CanvasSurface {
-    if (this.destroyed) {
-      throw new Error("Cannot register a surface on a destroyed Prism CanvasRuntime.");
-    }
+    this.assertNotDestroyed("register a surface with");
 
     return this.surfaces.register(element, options);
   }
@@ -352,6 +353,7 @@ export class CanvasRuntime {
    * @returns This runtime for chaining.
    */
   onUpdate(handler: UpdateHandler): this {
+    this.assertNotDestroyed("register an update handler on");
     this.updateHandlers.push(handler);
     return this;
   }
@@ -367,6 +369,7 @@ export class CanvasRuntime {
    * @returns This runtime for chaining.
    */
   onPaint(handler: PaintHandler): this {
+    this.assertNotDestroyed("register a paint handler on");
     this.paintHandlers.push(handler);
     this.invalidate();
     return this;
@@ -392,9 +395,7 @@ export class CanvasRuntime {
    */
   paintOnce(): Promise<void> {
     if (this.destroyed) {
-      return Promise.reject(
-        new Error("Cannot paint a destroyed Prism CanvasRuntime.")
-      );
+      return Promise.reject(createDestroyedRuntimeError("paint"));
     }
 
     return new Promise((resolve, reject) => {
@@ -438,6 +439,7 @@ export class CanvasRuntime {
    * Starts the runtime frame loop.
    */
   start(): void {
+    this.assertNotDestroyed("start");
     this.loop.start();
   }
 
@@ -445,6 +447,10 @@ export class CanvasRuntime {
    * Stops the runtime frame loop.
    */
   stop(): void {
+    if (this.destroyed) {
+      return;
+    }
+
     this.loop.stop();
   }
 
@@ -460,11 +466,15 @@ export class CanvasRuntime {
       return;
     }
 
-    this.destroyed = true;
     this.stop();
+    this.destroyed = true;
     this.hiDpiObserver.disconnect();
     if (this.backend.usesNativePaintEvent && hasNativeHtmlCanvas(this.canvas, this.ctx)) {
       this.canvas.onpaint = null;
+    }
+    if (this.ownsNativeLayoutSubtree) {
+      // Remove only Prism-owned experimental canvas state, preserving app-authored attributes.
+      this.canvas.removeAttribute("layoutsubtree");
     }
     this.fallbackPaintScheduled = false;
     this.nativePaintRequestedForWaiters = false;
@@ -560,6 +570,18 @@ export class CanvasRuntime {
       waiter.reject(error);
     }
   }
+
+  private assertNotDestroyed(operation: string): void {
+    if (this.destroyed) {
+      throw createDestroyedRuntimeError(operation);
+    }
+  }
+}
+
+function createDestroyedRuntimeError(operation: string): Error {
+  return new Error(
+    `Cannot ${operation} a destroyed CanvasRuntime. Create a new CanvasRuntime instead.`
+  );
 }
 
 function toError(error: unknown): Error {
