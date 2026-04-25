@@ -1,0 +1,69 @@
+---
+title: Types
+description: Public TypeScript types exported from the package root.
+---
+
+All public Prism imports come from the package root:
+
+```ts
+import {
+  CanvasRuntime,
+  type CanvasRuntimeOptions,
+  type CanvasSurface,
+  type SurfaceOptions
+} from "@synthesisengineering/prism";
+```
+
+Do not import runtime internals, backend classes, paint-pass helpers, or platform wrappers from subpaths.
+
+## Runtime
+
+```ts
+type CanvasBackendKind = "native" | "fallback";
+type CanvasBackendPreference = "auto" | CanvasBackendKind;
+
+type CanvasRuntimeOptions = Readonly<{
+  backend?: CanvasBackendPreference;
+}>;
+```
+
+## Surface
+
+```ts
+type SurfaceBoundsInput =
+  | RectLike
+  | (() => RectLike);
+
+type SurfaceOptions = Readonly<{
+  bounds: SurfaceBoundsInput;
+  ariaLabel?: string;
+}>;
+```
+
+Surface bounds are CSS pixels.
+
+## Paint and Update
+
+```ts
+type UpdateHandler = (time: FrameTime) => void;
+
+type PaintHandler = (api: {
+  ctx: CanvasRenderingContext2D;
+  time: FrameTime;
+  drawSurface: (surface: CanvasSurface) => void;
+  invalidate: () => void;
+}) => void;
+```
+
+Direct drawing with `ctx` uses backing-store pixels. Registered surfaces use CSS-pixel bounds and should be drawn with `drawSurface(surface)`.
+
+## Coordinates
+
+```ts
+type CanvasPoint = Readonly<{
+  x: number;
+  y: number;
+}>;
+```
+
+`clientToCanvasPoint()` returns CSS-pixel coordinates. `cssLengthToCanvasPixels()` and `cssPointToCanvasPixels()` convert CSS-space values for direct canvas drawing.

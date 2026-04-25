@@ -1,0 +1,21 @@
+---
+title: Invalidation
+description: Tell Prism when app-owned data or surface state needs another paint pass.
+---
+
+Prism owns the paint lifecycle, but your app owns the state that changes what should be drawn.
+
+Call the invalidation API from paint handlers when another runtime-owned pass is needed:
+
+```ts
+runtime.onPaint(({ drawSurface, invalidate }) => {
+  drawSurface(surface);
+
+  if (animationStillRunning) {
+    invalidate();
+  }
+});
+```
+
+Keep app state outside Prism. Use invalidation to schedule painting, not to store application data.
+

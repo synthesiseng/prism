@@ -9,14 +9,26 @@ export const metadata: Metadata = {
     template: "%s | Prism"
   },
   description:
-    "Documentation for Prism, a native-first HTML-in-Canvas runtime for managed HTML/CSS canvas surfaces."
+    "Documentation for Prism, a native-first HTML-in-Canvas runtime for managed HTML/CSS canvas surfaces.",
+  authors: [{ name: "Sara Loera" }, { name: "Synthesis Engineering" }],
+  creator: "Sara Loera",
+  publisher: "Synthesis Engineering",
+  keywords: [
+    "Prism",
+    "Synthesis Engineering",
+    "Sara Loera",
+    "HTML-in-Canvas",
+    "CanvasRuntime",
+    "HTML canvas",
+    "TypeScript runtime"
+  ]
 };
 
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="en" suppressHydrationWarning>
+    <html lang="en" className="dark" suppressHydrationWarning>
       <body className="flex min-h-screen flex-col">
-        <RootProvider>{children}</RootProvider>
+        <RootProvider theme={{ enabled: false }}>{children}</RootProvider>
       </body>
     </html>
   );

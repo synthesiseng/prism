@@ -1,9 +1,11 @@
 {
-  "title": "Explanation",
+  "title": "Runtime",
   "pages": [
-    "concepts",
-    "native-vs-fallback",
-    "coordinate-spaces",
-    "paint-lifecycle"
+    "canvas-runtime",
+    "canvas-surface",
+    "register-surface",
+    "paint-once",
+    "invalidation",
+    "cleanup"
   ]
 }

@@ -1,11 +1,4 @@
 {
   "title": "Prism",
-  "pages": [
-    "index",
-    "tutorials",
-    "how-to",
-    "explanation",
-    "reference",
-    "examples"
-  ]
+  "pages": ["tutorials", "explanation", "how-to", "examples", "reference"]
 }

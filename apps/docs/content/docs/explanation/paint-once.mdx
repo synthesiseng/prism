@@ -1,0 +1,20 @@
+---
+title: paintOnce()
+description: Wait for one Prism-owned paint pass.
+---
+
+`paintOnce()` waits for a Prism-owned paint pass. It does not export image data.
+
+```ts
+await document.fonts.ready;
+await runtime.paintOnce();
+
+const blob = await new Promise<Blob | null>((resolve) => {
+  canvas.toBlob(resolve, "image/png");
+});
+```
+
+Use it when you need a deterministic readiness point before calling normal canvas APIs such as `toBlob()` or `toDataURL()`.
+
+`paintOnce()` works without starting the runtime loop.
+

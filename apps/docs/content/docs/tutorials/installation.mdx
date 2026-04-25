@@ -1,0 +1,40 @@
+---
+title: Installation
+description: Install Prism and enable native HTML-in-Canvas support in Chromium-based browsers.
+---
+
+Install the package from the public package root:
+
+```sh
+npm i @synthesisengineering/prism
+```
+
+Use the package root for app code:
+
+```ts
+import { CanvasRuntime } from "@synthesisengineering/prism";
+```
+
+Subpath imports are not supported public API.
+
+## Enable native rendering
+
+Native mode currently requires the browser's Canvas Draw Element flag.
+
+Chrome:
+
+1. Open `chrome://flags/#canvas-draw-element`.
+2. Set **Canvas Draw Element** to **Enabled**.
+3. Relaunch Chrome.
+
+Brave:
+
+1. Open `brave://flags/#canvas-draw-element`.
+2. Set **Canvas Draw Element** to **Enabled**.
+3. Relaunch Brave.
+
+The flag is browser-local. Enabling it in Chrome does not enable it in Brave.
+
+## Fallback
+
+Prism can run in fallback mode for compatibility, but fallback is lower fidelity than native HTML-in-Canvas. Treat it as a compatibility path, not the definition of Prism's rendering behavior.

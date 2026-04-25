@@ -1,0 +1,21 @@
+---
+title: Cleanup
+description: Stop painting, dispose surfaces, and return DOM ownership cleanly.
+---
+
+Dispose surfaces when they are no longer part of the canvas composition:
+
+```ts
+surface.dispose();
+```
+
+Destroy the runtime when the canvas integration is finished:
+
+```ts
+runtime.destroy();
+```
+
+`destroy()` stops the runtime, unregisters surfaces, clears handlers and waiters, removes Prism-owned native canvas state, and restores Prism-owned DOM state as closely as possible.
+
+`stop()` is idempotent and safe after `destroy()`. A destroyed runtime should not be restarted or accept new handlers.
+
