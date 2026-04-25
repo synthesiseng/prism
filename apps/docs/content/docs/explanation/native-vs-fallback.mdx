@@ -1,0 +1,27 @@
+---
+title: Native vs Fallback
+description: Native HTML-in-Canvas is the primary Prism path; fallback is compatibility-only and lower fidelity.
+---
+
+Prism is native-first.
+
+Native mode uses browser support for HTML-in-Canvas. It currently requires a Chromium build with:
+
+```txt
+chrome://flags/#canvas-draw-element
+```
+
+## Native mode
+
+Native mode is the real Prism path. It lets registered HTML/CSS surfaces participate in the canvas paint and export pipeline.
+
+## Fallback mode
+
+Fallback exists only as a compatibility path. It is lower fidelity and not equivalent to native HTML rendering.
+
+Fallback does not define Prism's public API. App code should still use `CanvasRuntime`, `registerSurface()`, `onPaint()`, and `paintOnce()` the same way.
+
+## Related
+
+- [Concepts](/docs/explanation/concepts)
+- [Options reference](/docs/reference/options)

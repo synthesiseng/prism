@@ -1,0 +1,56 @@
+---
+title: Options
+description: Public option and handler types.
+---
+
+## CanvasRuntimeOptions
+
+```ts
+type CanvasRuntimeOptions = {
+  backend?: "auto" | "native" | "fallback";
+};
+```
+
+Use `"auto"` for normal code. Native is preferred when available; fallback is compatibility-only and lower fidelity.
+
+## SurfaceOptions
+
+```ts
+type SurfaceOptions = {
+  bounds: SurfaceBoundsInput;
+  ariaLabel?: string;
+};
+```
+
+## SurfaceBoundsInput
+
+Bounds are CSS pixels.
+
+```ts
+type SurfaceBoundsInput = {
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+};
+```
+
+## Handlers
+
+```ts
+type PaintHandler = (event: {
+  ctx: CanvasRenderingContext2D;
+  drawSurface(surface: CanvasSurface): void;
+}) => void;
+
+type UpdateHandler = (time: number) => void;
+```
+
+## CanvasPoint
+
+```ts
+type CanvasPoint = {
+  x: number;
+  y: number;
+};
+```

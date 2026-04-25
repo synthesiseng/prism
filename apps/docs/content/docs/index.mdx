@@ -1,0 +1,51 @@
+---
+title: Prism
+description: Native-first HTML-in-Canvas runtime for managed HTML/CSS canvas surfaces.
+---
+
+Prism is runtime infrastructure for apps that want real HTML/CSS elements to participate as managed canvas surfaces.
+
+It builds on the HTML-in-Canvas proposal and related WICG work. The platform provides the underlying primitive; Prism provides the runtime layer around it.
+
+## What Prism owns
+
+- `CanvasRuntime`
+- `CanvasSurface` registration
+- backend selection
+- paint lifecycle
+- invalidation
+- CSS-pixel surface bounds
+- backing-store conversion helpers
+- paint readiness
+- export timing
+- surface cleanup
+
+## What your app owns
+
+- app state
+- data
+- templates
+- transforms
+- layout decisions
+- chart or rendering logic
+- UI decisions
+- interaction state
+
+## Start here
+
+- [Create your first surface](/docs/tutorials/first-surface)
+- [Understand the core concepts](/docs/explanation/concepts)
+- [Export a PNG](/docs/how-to/export-png)
+- [Read the API reference](/docs/reference/api)
+
+## Current scope
+
+Prism v1 is 2D-first. WebGL and WebGPU integration are future work, not the current center of the library.
+
+Native HTML-in-Canvas currently requires a Chromium build with the flag enabled:
+
+```txt
+chrome://flags/#canvas-draw-element
+```
+
+Fallback exists only as a lower-fidelity compatibility path. It does not define the public API and is not equivalent to native HTML rendering.

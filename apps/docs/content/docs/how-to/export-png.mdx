@@ -1,0 +1,42 @@
+---
+title: Export a PNG
+description: Wait for one Prism-owned paint pass, then export with the normal canvas API.
+---
+
+Prism does not export image data itself. It gives you a deterministic readiness point before you call canvas APIs.
+
+```ts
+await document.fonts.ready;
+await runtime.paintOnce();
+
+const blob = await new Promise<Blob | null>((resolve) => {
+  canvas.toBlob(resolve, "image/png");
+});
+```
+
+If your surfaces include images, make sure they are loaded or decoded before `paintOnce()`.
+
+```ts
+await Promise.all(
+  Array.from(document.images).map((image) =>
+    image.complete ? undefined : image.decode()
+  )
+);
+
+await document.fonts.ready;
+await runtime.paintOnce();
+canvas.toBlob((blob) => {
+  // Save or upload the PNG blob.
+}, "image/png");
+```
+
+## Notes
+
+- `paintOnce()` works without `start()`.
+- `paintOnce()` resolves after one Prism-owned paint pass.
+- `paintOnce()` does not call `toBlob()` or `toDataURL()` for you.
+
+## Related
+
+- [Paint lifecycle](/docs/explanation/paint-lifecycle)
+- [CanvasRuntime reference](/docs/reference/canvas-runtime)

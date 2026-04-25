@@ -1,0 +1,35 @@
+---
+title: API
+description: Supported public API exported from the package root.
+---
+
+Import Prism from the package root:
+
+```ts
+import { CanvasRuntime } from "@synthesisengineering/prism";
+```
+
+Everything outside the package root is not public API. Runtime internals, backend classes, and raw HTML-in-Canvas wrappers are internal.
+
+## Public exports
+
+- `CanvasRuntime`
+- `CanvasSurface`
+- `CanvasBackendKind`
+- `CanvasBackendPreference`
+- `CanvasRuntimeOptions`
+- `SurfaceOptions`
+- `SurfaceBoundsInput`
+- `PaintHandler`
+- `UpdateHandler`
+- `CanvasPoint`
+
+`CanvasRuntime` is the only constructible public runtime class.
+
+`CanvasSurface` is returned by `registerSurface()` and should not be constructed by apps.
+
+## Related
+
+- [CanvasRuntime](/docs/reference/canvas-runtime)
+- [CanvasSurface](/docs/reference/canvas-surface)
+- [Options](/docs/reference/options)
