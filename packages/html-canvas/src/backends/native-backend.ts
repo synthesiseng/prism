@@ -28,7 +28,11 @@ export class NativeHtmlCanvasBackend implements RuntimeBackend {
         draw.pixelBounds.width,
         draw.pixelBounds.height
       );
-      syncTransform(draw.surface, transform, draw.cssBounds);
+      syncTransform(
+        draw.surface,
+        transform ?? new DOMMatrix().translateSelf(draw.cssBounds.x, draw.cssBounds.y),
+        draw.cssBounds
+      );
     }
   }
 }

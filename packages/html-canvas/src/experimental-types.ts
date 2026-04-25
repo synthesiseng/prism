@@ -15,7 +15,8 @@ export type HtmlCanvasContext2D = CanvasRenderingContext2D & {
    * @param dy - Destination Y coordinate in backing-store pixels.
    * @param dWidth - Optional destination width in backing-store pixels.
    * @param dHeight - Optional destination height in backing-store pixels.
-   * @returns Transform used to synchronize the accessible DOM element.
+   * @returns Transform used to synchronize the accessible DOM element, or
+   * `null` when the experimental browser API cannot provide one for the draw.
    */
   drawElementImage(
     element: Element,
@@ -23,7 +24,7 @@ export type HtmlCanvasContext2D = CanvasRenderingContext2D & {
     dy: number,
     dWidth?: number,
     dHeight?: number
-  ): DOMMatrix;
+  ): DOMMatrix | null;
 };
 
 /**
