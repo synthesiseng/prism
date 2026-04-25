@@ -1,0 +1,8 @@
+{
+  "title": "How-to Guides",
+  "pages": [
+    "export-png",
+    "use-react-surfaces",
+    "use-html-surfaces-in-canvas-data-viz"
+  ]
+}

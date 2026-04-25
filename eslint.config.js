@@ -7,8 +7,12 @@ export default tseslint.config(
     ignores: [
       "**/dist/**",
       "**/coverage/**",
+      "**/.next/**",
+      "**/.source/**",
       "**/node_modules/**",
       "eslint.config.js",
+      "apps/docs/next.config.mjs",
+      "apps/docs/postcss.config.mjs",
       "scripts/*.mjs",
       "apps/*/scripts/*.mjs",
       "prettier.config.cjs",

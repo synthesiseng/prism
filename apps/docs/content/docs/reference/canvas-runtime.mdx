@@ -1,0 +1,60 @@
+---
+title: CanvasRuntime
+description: Public runtime facade for one canvas.
+---
+
+`CanvasRuntime` owns one canvas and the managed HTML surfaces registered to it.
+
+```ts
+const runtime = new CanvasRuntime(canvas, {
+  backend: "auto"
+});
+```
+
+## Properties
+
+- `canvas`
+- `width`
+- `height`
+- `pixelRatio`
+- `backendKind`
+
+`width` and `height` are CSS pixels. Direct drawing with `ctx` inside
+`onPaint()` uses canvas backing-store pixels.
+
+## Methods
+
+- `registerSurface(element, options)`
+- `unregisterSurface(surface)`
+- `onUpdate(handler)`
+- `onPaint(handler)`
+- `invalidate()`
+- `paintOnce()`
+- `start()`
+- `stop()`
+- `destroy()`
+- `clientToCanvasPoint(x, y)`
+- `cssLengthToCanvasPixels(length)`
+- `cssPointToCanvasPixels(point)`
+
+## Paint
+
+```ts
+runtime.onPaint(({ ctx, drawSurface }) => {
+  const size = runtime.cssLengthToCanvasPixels(24);
+  ctx.fillRect(0, 0, size, size);
+  drawSurface(surface);
+});
+```
+
+## Export readiness
+
+```ts
+await document.fonts.ready;
+await runtime.paintOnce();
+canvas.toBlob((blob) => {
+  // Export the image.
+}, "image/png");
+```
+
+`paintOnce()` waits for a Prism-owned paint pass. It does not export image data itself.

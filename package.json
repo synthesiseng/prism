@@ -42,7 +42,7 @@
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
     "test": "vitest run",
-    "lint": "eslint .",
+    "lint": "pnpm --filter @prism/docs source && eslint .",
     "typecheck": "tsc -b tsconfig.build.json",
     "format": "prettier --write .",
     "prepack": "pnpm build && node scripts/prepare-package.mjs"

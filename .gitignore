@@ -6,6 +6,8 @@ dist/
 coverage/
 .vite/
 .turbo/
+.next/
+.source/
 
 # Build artifacts
 *.tsbuildinfo

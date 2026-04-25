@@ -1,0 +1,52 @@
+---
+title: First Surface
+description: Create one HTML element, register it with Prism, and draw it into a canvas paint pass.
+---
+
+This is the shortest path to a working Prism surface.
+
+## Install
+
+```sh
+pnpm add @synthesisengineering/prism
+```
+
+## Create markup
+
+```html
+<canvas id="canvas"></canvas>
+<div id="card">Hello from HTML</div>
+```
+
+## Register and paint
+
+```ts
+import { CanvasRuntime } from "@synthesisengineering/prism";
+
+const canvas = document.querySelector<HTMLCanvasElement>("#canvas");
+const element = document.querySelector<HTMLElement>("#card");
+
+if (!canvas || !element) {
+  throw new Error("Missing canvas or surface element.");
+}
+
+const runtime = new CanvasRuntime(canvas, { backend: "auto" });
+
+const surface = runtime.registerSurface(element, {
+  bounds: { x: 0, y: 0, width: 320, height: 180 }
+});
+
+runtime.onPaint(({ drawSurface }) => {
+  drawSurface(surface);
+});
+
+runtime.start();
+```
+
+The `bounds` value uses CSS pixels. Prism owns conversion to the canvas backing store.
+
+## Next
+
+- [Concepts](/docs/explanation/concepts)
+- [Coordinate spaces](/docs/explanation/coordinate-spaces)
+- [CanvasRuntime reference](/docs/reference/canvas-runtime)
