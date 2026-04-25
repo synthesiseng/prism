@@ -1,0 +1,165 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Prism Atlantic - Hurricane Tracks 1980-2025</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      rel="stylesheet"
+      href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Inter:wght@300;400;500;600;700&display=swap"
+    />
+  </head>
+  <body>
+    <main id="stage" aria-label="Prism Atlantic hurricane track visualization">
+      <section id="native-gate" class="native-gate" aria-live="polite">
+        <div class="native-gate-card">
+          <div class="native-gate-eyebrow">Native HTML-in-Canvas required</div>
+          <h1>Enable the browser flag to view Prism Atlantic.</h1>
+          <p>
+            This example uses Prism's native HTML-in-Canvas runtime. Open it in a Chromium
+            build with the canvas draw element flag enabled.
+          </p>
+          <code>chrome://flags/#canvas-draw-element</code>
+        </div>
+      </section>
+
+      <canvas id="viz" aria-label="North Atlantic hurricane tracks"></canvas>
+
+      <div id="surface-root">
+        <div id="brand" aria-label="Prism Atlantic">
+          <div class="mark">PRISM <span class="dot">◆</span> ATLANTIC</div>
+          <div class="sub">North Atlantic Tropical Cyclones · 1980-2025</div>
+        </div>
+
+        <section id="metric" class="surface" aria-label="Basin overview">
+          <div class="label"><span class="pulse"></span>Basin Overview</div>
+          <div class="title">North Atlantic</div>
+          <div class="sub">1980-2025</div>
+          <div class="row">
+            <span class="k">named storms</span><span class="v" id="m-total">847</span>
+          </div>
+          <div class="row">
+            <span class="k">major hurricanes</span><span class="v" id="m-major">186</span>
+          </div>
+          <div class="row">
+            <span class="k">cat 5 events</span><span class="v" id="m-cat5">37</span>
+          </div>
+          <div class="divider"></div>
+          <div class="row">
+            <span class="k">visible tracks</span><span class="v" id="m-visible">--</span>
+          </div>
+          <div class="row">
+            <span class="k">peak season</span><span class="v">aug - oct</span>
+          </div>
+        </section>
+
+        <section id="legend" class="surface" aria-label="Saffir-Simpson legend">
+          <div class="label">Saffir-Simpson</div>
+          <ul>
+            <li data-cat="0" tabindex="0">
+              <span class="swatch s0"></span><span class="name">Tropical Storm</span
+              ><span class="count" id="c0">--</span>
+            </li>
+            <li data-cat="1" tabindex="0">
+              <span class="swatch s1"></span><span class="name">Category 1</span
+              ><span class="count" id="c1">--</span>
+            </li>
+            <li data-cat="2" tabindex="0">
+              <span class="swatch s2"></span><span class="name">Category 2</span
+              ><span class="count" id="c2">--</span>
+            </li>
+            <li data-cat="3" tabindex="0">
+              <span class="swatch s3"></span><span class="name">Category 3</span
+              ><span class="count" id="c3">--</span>
+            </li>
+            <li data-cat="4" tabindex="0">
+              <span class="swatch s4"></span><span class="name">Category 4</span
+              ><span class="count" id="c4">--</span>
+            </li>
+            <li data-cat="5" tabindex="0">
+              <span class="swatch s5"></span><span class="name">Category 5</span
+              ><span class="count" id="c5">--</span>
+            </li>
+          </ul>
+        </section>
+
+        <button id="export" title="Export composition as PNG">
+          <svg
+            viewBox="0 0 16 16"
+            fill="none"
+            stroke="currentColor"
+            stroke-width="1.4"
+            stroke-linecap="round"
+            stroke-linejoin="round"
+            aria-hidden="true"
+          >
+            <path d="M8 1.5v8.5" />
+            <path d="M4.5 6.5L8 10l3.5-3.5" />
+            <path d="M2 12.5v1.5h12v-1.5" />
+          </svg>
+          <span id="export-label">Export PNG</span>
+        </button>
+
+        <div id="caption" aria-label="Dataset caption">
+          <div class="strong">PRISM/ATLANTIC R1</div>
+          <div>@bysynthesis · HTML-IN-CANVAS</div>
+        </div>
+
+        <div id="tooltip" class="surface" role="status" aria-live="polite">
+          <div class="row1">
+            <span class="name" id="tt-name">--</span>
+            <span class="badge" id="tt-badge">--</span>
+          </div>
+          <div class="data">
+            <span class="k">wind</span><span class="v" id="tt-wind">--</span>
+            <span class="k">date</span><span class="v" id="tt-date">--</span>
+            <span class="k">position</span><span class="v" id="tt-pos">--</span>
+            <span class="k">season</span><span class="v" id="tt-season">--</span>
+          </div>
+        </div>
+
+        <aside id="panel" class="surface" aria-hidden="true">
+          <button class="x" id="panel-x" aria-label="Close storm detail">×</button>
+          <div class="eyebrow" id="p-eyebrow">North Atlantic · Storm</div>
+          <h2 class="name" id="p-name">--</h2>
+          <div class="season" id="p-season">--</div>
+          <div class="badge-row"><span class="badge" id="p-badge">--</span></div>
+          <div class="stats">
+            <div class="stat">
+              <div class="k">peak wind</div>
+              <div class="v"><span id="p-wind">--</span><small>mph</small></div>
+            </div>
+            <div class="stat">
+              <div class="k">duration</div>
+              <div class="v"><span id="p-dur">--</span><small>days</small></div>
+            </div>
+            <div class="stat">
+              <div class="k">track length</div>
+              <div class="v"><span id="p-len">--</span><small>nm</small></div>
+            </div>
+            <div class="stat">
+              <div class="k">peak category</div>
+              <div class="v" id="p-cat">--</div>
+            </div>
+          </div>
+          <div class="timeline-label">
+            <span>Intensity</span><span id="p-tl-peak">--</span>
+          </div>
+          <div class="timeline">
+            <svg id="p-tl" viewBox="0 0 240 60" preserveAspectRatio="none"></svg>
+          </div>
+          <div class="timeline-axis">
+            <span id="p-tl-start">--</span><span id="p-tl-end">--</span>
+          </div>
+          <div class="landfalls">
+            <div class="k">Landfalls</div>
+            <div class="list" id="p-landfalls"></div>
+          </div>
+        </aside>
+      </div>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
