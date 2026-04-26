@@ -1,32 +1,34 @@
-# Node dependencies
+# Dependencies
 node_modules/
 
 # Build artifacts
 dist/
-coverage/
-playwright-report/
-test-results/
 .vite/
 .turbo/
 .next/
 .source/
-
-# Build artifacts
 *.tsbuildinfo
 *.tgz
 *.log
 
+# Test artifacts
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+blob-report/
+
 # Generated example data
 apps/prism-atlantic/src/data/hurdat2-atlantic.json
-
-# OS files
-.DS_Store
-Thumbs.db
 
 # Environment variables
 .env
 .env.*
 !.env.example
 
-# Docs
+# Local project notes
 AGENTS.md
+
+# OS files
+.DS_Store
+Thumbs.db
