@@ -45,6 +45,7 @@
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
     "e2e": "playwright test",
+    "e2e:native": "playwright test --config playwright.native.config.ts",
     "test": "vitest run",
     "lint": "pnpm --filter @prism/docs source && eslint .",
     "typecheck": "tsc -b tsconfig.build.json",

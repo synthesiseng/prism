@@ -55,13 +55,42 @@ type ResizeCleanupResult = Readonly<{
   noRetainedPrismComments: boolean;
 }>;
 
+type NativeLifecycleResult = Readonly<{
+  backendKind: string;
+  paintOnceResolved: boolean;
+  drawElementImageCalls: number;
+  canvasOnpaintInstalledWhileActive: boolean;
+  canvasOnpaintClearedAfterDestroy: boolean;
+  layoutSubtreePresentWhileActive: boolean;
+  layoutSubtreeRemovedAfterDestroy: boolean;
+  parentRestored: boolean;
+  styleRestored: boolean;
+  ariaLabelRestored: boolean;
+  appDataPreserved: boolean;
+  prismAttributeRemoved: boolean;
+  noRetainedPrismSurfaceElements: boolean;
+  noRetainedPrismComments: boolean;
+  noRetainedCanvases: boolean;
+}>;
+
 type PrismLifecycleFixture = Readonly<{
   runCreateDestroyCycles(cycles: number): Promise<LifecycleCycleResult[]>;
   testDisposedSurfaceBehavior(): Promise<DisposedSurfaceResult>;
   testDestroyedRuntimeBehavior(): Promise<DestroyedRuntimeResult>;
   testNoPaintLoopAfterDestroy(): Promise<PaintLoopResult>;
   testResizeBoundsCleanup(): Promise<ResizeCleanupResult>;
+  testNativeLifecycle(): Promise<NativeLifecycleResult>;
 }>;
+
+type NativeCanvasContext = CanvasRenderingContext2D & {
+  drawElementImage?: (
+    element: Element,
+    x: number,
+    y: number,
+    width?: number,
+    height?: number
+  ) => DOMMatrix | null;
+};
 
 declare global {
   interface Window {
@@ -80,7 +109,8 @@ window.prismLifecycleFixture = {
   testDisposedSurfaceBehavior,
   testDestroyedRuntimeBehavior,
   testNoPaintLoopAfterDestroy,
-  testResizeBoundsCleanup
+  testResizeBoundsCleanup,
+  testNativeLifecycle
 };
 
 async function runCreateDestroyCycles(cycles: number): Promise<LifecycleCycleResult[]> {
@@ -329,6 +359,71 @@ async function testResizeBoundsCleanup(): Promise<ResizeCleanupResult> {
   return result;
 }
 
+async function testNativeLifecycle(): Promise<NativeLifecycleResult> {
+  const root = createCycleRoot(5000);
+  const canvas = createCanvas(5000);
+  const element = createSourceElement(5000, 0);
+  const snapshot = snapshotElement(element);
+  root.append(canvas, element);
+
+  const ctx = canvas.getContext("2d");
+  const drawElementImageState = observeDrawElementImage(ctx);
+  let runtime: CanvasRuntime;
+
+  try {
+    runtime = new CanvasRuntime(canvas, { backend: "native" });
+  } catch (error) {
+    root.remove();
+    throw new Error(
+      `Native HTML-in-Canvas backend unavailable. Enable chrome://flags/#canvas-draw-element in a Chromium build and rerun pnpm e2e:native. ${String(
+        error instanceof Error ? error.message : error
+      )}`
+    );
+  }
+
+  const surface = runtime.registerSurface(element, {
+    bounds: { x: 12, y: 18, width: 140, height: 64 },
+    ariaLabel: "Native runtime surface"
+  });
+  let paintOnceResolved = false;
+
+  runtime.onPaint(({ drawSurface }) => {
+    drawSurface(surface);
+  });
+
+  const canvasOnpaintInstalledWhileActive = canvas.onpaint !== null;
+  const layoutSubtreePresentWhileActive = canvas.getAttribute("layoutsubtree") === "";
+
+  await runtime.paintOnce();
+  paintOnceResolved = true;
+
+  runtime.destroy();
+
+  const result: NativeLifecycleResult = {
+    backendKind: runtime.backendKind,
+    paintOnceResolved,
+    drawElementImageCalls: drawElementImageState.calls,
+    canvasOnpaintInstalledWhileActive,
+    canvasOnpaintClearedAfterDestroy: canvas.onpaint == null,
+    layoutSubtreePresentWhileActive,
+    layoutSubtreeRemovedAfterDestroy: !canvas.hasAttribute("layoutsubtree"),
+    parentRestored: element.parentElement === root,
+    styleRestored: element.getAttribute("style") === snapshot.style,
+    ariaLabelRestored: element.getAttribute("aria-label") === snapshot.ariaLabel,
+    appDataPreserved: element.getAttribute("data-app-owned") === snapshot.appOwned,
+    prismAttributeRemoved: element.getAttribute("data-prism-surface") === snapshot.prismSurface,
+    noRetainedPrismSurfaceElements: document.querySelectorAll("[data-prism-surface]").length === 0,
+    noRetainedPrismComments: countPrismComments(document.body) === 0,
+    noRetainedCanvases: document.querySelectorAll("canvas").length === 1
+  };
+
+  root.remove();
+  return {
+    ...result,
+    noRetainedCanvases: document.querySelectorAll("canvas").length === 0
+  };
+}
+
 function createCycleRoot(cycle: number): HTMLElement {
   const root = document.createElement("section");
   root.dataset.fixtureCycle = String(cycle);
@@ -461,4 +556,28 @@ async function waitForCondition(condition: () => boolean): Promise<void> {
     }
     await nextAnimationFrame();
   }
+}
+
+function observeDrawElementImage(
+  context: CanvasRenderingContext2D | null
+): Readonly<{ get calls(): number }> {
+  const nativeContext: NativeCanvasContext | null = context;
+
+  if (!nativeContext?.drawElementImage) {
+    return { get calls() { return 0; } };
+  }
+
+  const originalDrawElementImage = nativeContext.drawElementImage.bind(nativeContext);
+  let calls = 0;
+
+  nativeContext.drawElementImage = (...args) => {
+    calls += 1;
+    return originalDrawElementImage(...args);
+  };
+
+  return {
+    get calls() {
+      return calls;
+    }
+  };
 }
