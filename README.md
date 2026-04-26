@@ -1,10 +1,20 @@
 <h1 align="center">Prism</h1>
 
 <p align="center">
-  Native-first HTML-in-Canvas runtime for treating HTML/CSS as first-class canvas surfaces.
+  Native-first HTML-in-Canvas runtime for managed DOM surfaces in canvas applications.
 </p>
 
-It manages HTML surface registration, paint lifecycle, sizing, transform sync, invalidation, and paint readiness so app code does not need to coordinate raw `onpaint`, `requestPaint()`, or `drawElementImage()` directly.
+Prism does not replace your renderer. It gives canvas applications managed DOM-authored surfaces.
+
+## What Prism is
+
+Prism is not a canvas engine, UI kit, design tool, app framework, game engine, or charting library.
+
+Author visual surfaces with HTML/CSS/SVG, compose them inside Canvas 2D workflows, and let Prism manage surface registration, bounds, paint lifecycle, invalidation, readiness, coordinate helpers, and cleanup.
+
+Your app still owns the scene, drawing model, animation loop, app state, chart logic, game logic, templates, transforms, and interaction rules.
+
+Prism owns the lifecycle for DOM-authored canvas surfaces.
 
 ## Installation
 
@@ -193,7 +203,7 @@ Options:
 - Native mode depends on browser support for HTML-in-Canvas.
 - Fallback is not equivalent to native HTML rendering.
 - Prism v1 is 2D-first.
-- WebGL/WebGPU integration is future work, not the current center.
+- WebGL/WebGPU and renderer integrations are future-facing, not the current public API center.
 
 ## Native Support
 
