@@ -121,6 +121,7 @@ function drawTrail(api: DrawApi): number {
 
 function drawSplit(api: DrawApi): number {
   const { ctx, surface, state, drawSurface } = api;
+  const palette = palettes[state.paletteName];
   const center = canvasCenter(ctx);
   const spread = 12 + Math.abs(state.sx) * 22;
   const base = {
@@ -131,7 +132,8 @@ function drawSplit(api: DrawApi): number {
     rotation: state.sx * 0.18,
     scale: drawScale(api, 0.82),
     composite: "screen" as GlobalCompositeOperation,
-    alpha: 0.68 * opacityMorph(state)
+    alpha: 0.68 * opacityMorph(state),
+    shadow: palette
   };
 
   return [
@@ -205,7 +207,7 @@ function drawTransformed(options: Readonly<{
   ctx.globalAlpha = Math.max(0, Math.min(1, alpha));
   ctx.globalCompositeOperation = composite ?? "source-over";
   ctx.shadowColor = tint;
-  ctx.shadowBlur = shadow ? 1.1 * shadow.glow : 0.8;
+  ctx.shadowBlur = shadow ? 7 * shadow.glow : 0;
   surface.element.style.color = tint;
   // This is the core Prism move: draw the same live DOM surface many times
   // under normal canvas transforms to turn HTML/CSS/SVG into art material.
@@ -234,7 +236,8 @@ function drawWorld(
     rotation: degreesToRadians(rotation),
     scale: drawScale(api, scale * globalScale),
     alpha: alpha * (0.15 + 0.85 * opacityMorph(state)),
-    tint
+    tint,
+    shadow: palettes[state.paletteName]
   };
 
   return composite

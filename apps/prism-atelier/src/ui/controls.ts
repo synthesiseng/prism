@@ -245,7 +245,7 @@ const patternOptions = ["dots", "lines", "grid"] as const;
 
 function sanitizeWord(value: string): string {
   const word = value.toUpperCase().replace(/[^A-Z0-9 ]/g, "").slice(0, 16);
-  return word.length > 0 ? word : "SURFACE";
+  return word.length > 0 ? word : "PRISM";
 }
 
 function escapeAttribute(value: string): string {
