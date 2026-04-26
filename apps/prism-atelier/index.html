@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <title>Prism Atelier</title>
+  </head>
+  <body>
+    <div class="wordmark" aria-label="Prism Atelier">
+      <span class="pixel" aria-hidden="true"><i></i><i></i><i></i><i></i></span>
+      <span>PRISM&nbsp;ATELIER</span>
+    </div>
+
+    <button class="palette-tag" id="paletteTag" type="button" aria-label="Cycle palette">
+      <span class="swatches" id="paletteSwatches"><i></i><i></i><i></i></span>
+      <span class="label" id="paletteLabel">VOID</span>
+    </button>
+
+    <main class="stage" id="stage">
+      <div class="canvas-wrap">
+        <canvas id="atelier-canvas" aria-label="Prism Atelier canvas">
+          <section id="source-root" aria-label="DOM-authored Prism source surfaces">
+            <div id="type-surface" class="surface-source type-surface">SURFACE</div>
+            <div id="glyph-surface" class="surface-source glyph-surface">
+              <svg viewBox="0 0 240 240" role="img" aria-label="Prism glyph">
+                <path class="glyph-line outer" d="M120 18 222 120 120 222 18 120Z" />
+                <path class="glyph-line inner" d="M120 66 174 120 120 174 66 120Z" />
+                <path class="glyph-line axis" d="M18 120H222M120 18V222" />
+                <circle class="glyph-core" cx="120" cy="120" r="23" />
+              </svg>
+            </div>
+            <div id="css-surface" class="surface-source css-surface">
+              <span></span><i></i><b></b>
+            </div>
+            <div id="pattern-surface" class="surface-source pattern-surface">
+              <svg viewBox="0 0 260 180" role="img" aria-label="Prism pattern tile">
+                <defs>
+                  <radialGradient id="patternGlow" cx="50%" cy="50%" r="70%">
+                    <stop offset="0%" stop-color="var(--pal-c)" stop-opacity="0.9" />
+                    <stop offset="100%" stop-color="var(--pal-a)" stop-opacity="0.08" />
+                  </radialGradient>
+                  <pattern id="dotGrid" width="26" height="26" patternUnits="userSpaceOnUse">
+                    <circle cx="4" cy="4" r="2.4" fill="var(--pal-a)" />
+                    <path d="M13 0V26M0 13H26" stroke="var(--pal-b)" stroke-opacity="0.28" stroke-width="1" />
+                  </pattern>
+                </defs>
+                <rect width="260" height="180" rx="14" fill="url(#patternGlow)" />
+                <rect width="260" height="180" rx="14" fill="url(#dotGrid)" opacity="0.9" />
+                <path d="M0 34H260M0 90H260M0 146H260" stroke="var(--pal-c)" stroke-opacity="0.32" stroke-width="2" />
+                <path d="M44 0 216 180M216 0 44 180" stroke="var(--pal-a)" stroke-opacity="0.2" stroke-width="3" />
+              </svg>
+            </div>
+          </section>
+        </canvas>
+      </div>
+    </main>
+
+    <div class="native-gate" id="nativeGate" hidden>
+      <div>
+        <p>Native HTML-in-Canvas required</p>
+        <h1>Prism Atelier requires native HTML-in-Canvas.</h1>
+        <span>Enable <code>chrome://flags/#canvas-draw-element</code> in Chromium/Chrome Canary.</span>
+      </div>
+    </div>
+
+    <div class="hint" id="hint">MOVE&nbsp;·&nbsp;TILT&nbsp;·&nbsp;PLAY</div>
+    <div class="flash" id="flash"></div>
+
+    <div class="toolbar-stack">
+      <div class="subbar show" id="subbar" role="group" aria-label="Surface options">
+        <span class="input-wrap">
+          <input class="text-input" id="typeInput" type="text" maxlength="16" value="SURFACE" autocomplete="off" spellcheck="false" />
+          <span class="blink"></span>
+        </span>
+      </div>
+
+      <div class="toolbar" id="toolbar" role="toolbar" aria-label="Prism Atelier controls">
+        <div class="group" id="surfaces" role="group" aria-label="Surface">
+          <button class="chip" type="button" data-source="glyph" aria-pressed="true" data-tip="GLYPH">
+            <span class="ico" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1.4 14.6 8 8 14.6 1.4 8Z"/><path d="M8 4.2 11.8 8 8 11.8 4.2 8Z"/></svg>
+            </span>
+            <span class="label">GLYPH</span>
+          </button>
+          <button class="chip" type="button" data-source="type" aria-pressed="false" data-tip="TYPE">
+            <span class="ico" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4V3H13V4"/><path d="M8 3V13"/><path d="M6 13H10"/></svg>
+            </span>
+            <span class="label">TYPE</span>
+          </button>
+          <button class="chip" type="button" data-source="css" aria-pressed="false" data-tip="CSS">
+            <span class="ico" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.3"><circle cx="8" cy="8" r="5.4"/><path d="M2.6 8H13.4M8 2.6V13.4"/></svg>
+            </span>
+            <span class="label">CSS</span>
+          </button>
+          <button class="chip" type="button" data-source="pattern" aria-pressed="false" data-tip="PATTERN">
+            <span class="ico" aria-hidden="true">
+              <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><rect x="2" y="2" width="5" height="5"/><rect x="9" y="2" width="5" height="5"/><rect x="2" y="9" width="5" height="5"/><rect x="9" y="9" width="5" height="5"/></svg>
+            </span>
+            <span class="label">PATTERN</span>
+          </button>
+        </div>
+
+        <span class="divider" aria-hidden="true"></span>
+
+        <div class="group" id="effects" role="group" aria-label="Effect">
+          <button class="chip effect-chip" type="button" data-mode="extrude" aria-pressed="true"><span class="label">EXTRUDE</span></button>
+          <button class="chip effect-chip" type="button" data-mode="orbit" aria-pressed="false"><span class="label">ORBIT</span></button>
+          <button class="chip effect-chip" type="button" data-mode="trail" aria-pressed="false"><span class="label">TRAIL</span></button>
+          <button class="chip effect-chip" type="button" data-mode="split" aria-pressed="false"><span class="label">SPLIT</span></button>
+          <button class="chip effect-chip" type="button" data-mode="grid" aria-pressed="false"><span class="label">GRID</span></button>
+        </div>
+
+        <span class="divider" aria-hidden="true"></span>
+
+        <button class="icon-btn randomize" id="randomize" type="button" aria-label="Randomize" title="Randomize">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <rect x="3.5" y="3.5" width="17" height="17" rx="3.5"/>
+            <circle cx="8" cy="8" r="1.2" fill="currentColor"/>
+            <circle cx="16" cy="8" r="1.2" fill="currentColor"/>
+            <circle cx="12" cy="12" r="1.2" fill="currentColor"/>
+            <circle cx="8" cy="16" r="1.2" fill="currentColor"/>
+            <circle cx="16" cy="16" r="1.2" fill="currentColor"/>
+          </svg>
+        </button>
+
+        <button class="export" id="export" type="button">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M8 2V11" />
+            <path d="M4.5 7.5 8 11 11.5 7.5"/>
+            <path d="M3 13H13"/>
+          </svg>
+          <span class="label">PNG</span>
+          <span class="ring" aria-hidden="true"></span>
+        </button>
+      </div>
+    </div>
+
+    <div class="meta" id="meta">1 DOM SURFACE · 28 CANVAS DRAWS</div>
+
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
