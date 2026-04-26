@@ -9,7 +9,7 @@ It manages HTML surface registration, paint lifecycle, sizing, transform sync, i
 ## Installation
 
 ```sh
-pnpm add @synthesisengineering/prism
+npm i @synthesisengineering/prism
 ```
 
 ## Quickstart
