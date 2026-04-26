@@ -44,6 +44,7 @@
   },
   "scripts": {
     "build": "tsc -b tsconfig.build.json",
+    "e2e": "playwright test",
     "test": "vitest run",
     "lint": "pnpm --filter @prism/docs source && eslint .",
     "typecheck": "tsc -b tsconfig.build.json",
@@ -52,6 +53,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",
+    "@playwright/test": "^1.59.1",
     "eslint": "^9.18.0",
     "eslint-plugin-tsdoc": "^0.5.2",
     "prettier": "^3.4.2",
