@@ -5,11 +5,7 @@ source artwork is ordinary HTML/CSS/SVG. Prism registers those DOM nodes as
 surfaces, and the app composes them repeatedly in a canvas paint pass to create
 generative artwork.
 
-This is not a card or panel example. The registered DOM nodes are the artwork
-source: a typographic HTML/CSS word surface, an inline SVG glyph, a CSS gradient
-surface, and an SVG/CSS pattern tile. Atelier draws the selected surface many
-times with canvas transforms, alpha, shadows, blend modes, and pointer-driven
-offsets.
+The registered DOM nodes are the artwork source: a typographic HTML/CSS word surface, an inline SVG glyph, a CSS gradient surface, and an SVG/CSS pattern tile. Atelier draws the selected surface many times with canvas transforms, alpha, shadows, blend modes, and pointer-driven offsets.
 
 ## Native Support
 
