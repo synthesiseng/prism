@@ -4,6 +4,8 @@ node_modules/
 # Build artifacts
 dist/
 coverage/
+playwright-report/
+test-results/
 .vite/
 .turbo/
 .next/
