@@ -7,6 +7,8 @@ Prism is runtime infrastructure for apps that want real HTML/CSS elements to par
 
 It builds on the HTML-in-Canvas proposal and related WICG work. The platform provides the underlying primitive; Prism provides the runtime layer around it.
 
+Prism does not replace your renderer. It gives canvas applications managed DOM-authored surfaces.
+
 ## What Prism owns
 
 - `CanvasRuntime`
@@ -26,6 +28,7 @@ It builds on the HTML-in-Canvas proposal and related WICG work. The platform pro
 - data
 - templates
 - transforms
+- animation loop
 - layout decisions
 - chart or rendering logic
 - UI decisions
@@ -42,7 +45,7 @@ It builds on the HTML-in-Canvas proposal and related WICG work. The platform pro
 
 ## Current scope
 
-Prism v1 is 2D-first. WebGL and WebGPU integration are future work, not the current center of the library.
+Prism v1 is 2D-first. WebGL/WebGPU and renderer integrations are future-facing, not the current public API center.
 
 Native HTML-in-Canvas currently requires a Chromium-based browser build with the Canvas Draw Element flag enabled. Chrome uses:
 
