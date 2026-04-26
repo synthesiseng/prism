@@ -1,7 +1,7 @@
 {
   "name": "@synthesisengineering/prism",
   "version": "0.1.0-alpha.4",
-  "description": "Native-first HTML-in-Canvas runtime for treating HTML/CSS as runtime-managed canvas surfaces.",
+  "description": "Native-first HTML-in-Canvas runtime for managing HTML/CSS as canvas surfaces.",
   "license": "MIT",
   "type": "module",
   "main": "./packages/html-canvas/dist/index.js",
@@ -32,8 +32,11 @@
   "keywords": [
     "canvas",
     "html-in-canvas",
-    "html-canvas",
-    "runtime"
+    "html",
+    "css",
+    "runtime",
+    "web-platform",
+    "graphics"
   ],
   "packageManager": "pnpm@9.15.4",
   "publishConfig": {
