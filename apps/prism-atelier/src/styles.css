@@ -280,6 +280,48 @@ body {
   transform: translateY(0) scale(1);
 }
 
+.sub-chip {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px 10px;
+  color: rgba(255, 255, 255, 0.6);
+  font: inherit;
+  font-size: 9.5px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  transition:
+    color 160ms,
+    background 160ms;
+}
+
+.sub-chip:hover {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.sub-chip[aria-pressed="true"] {
+  color: var(--pal-a);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow:
+    inset 0 0 0 1px rgba(255, 255, 255, 0.08),
+    0 0 14px -4px var(--pal-a);
+}
+
+.sub-chip svg {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.sub-chip[aria-pressed="true"] svg {
+  filter: drop-shadow(0 0 4px var(--pal-a));
+}
+
 .text-input {
   width: 200px;
   padding: 6px 12px;
@@ -632,15 +674,15 @@ body {
   -webkit-background-clip: text;
   background-clip: text;
   filter:
-    drop-shadow(0 0 18px color-mix(in srgb, var(--pal-a), transparent 18%))
-    drop-shadow(0 0 42px color-mix(in srgb, var(--pal-b), transparent 50%));
+    drop-shadow(0 0 2px color-mix(in srgb, var(--pal-a), transparent 18%))
+    drop-shadow(0 0 6px color-mix(in srgb, var(--pal-b), transparent 50%));
 }
 
 .glyph-surface {
   width: 240px;
   height: 240px;
   color: var(--pal-c);
-  filter: drop-shadow(0 0 22px var(--pal-a));
+  filter: drop-shadow(0 0 3px var(--pal-a));
 }
 
 .glyph-surface svg,
@@ -662,62 +704,57 @@ body {
 }
 
 .glyph-line.inner {
-  stroke: var(--pal-a);
+  stroke: currentColor;
   stroke-width: 4;
+  opacity: 0.72;
 }
 
 .glyph-line.axis {
-  stroke: var(--pal-b);
+  stroke: currentColor;
   stroke-width: 2;
-  opacity: 0.7;
+  opacity: 0.54;
 }
 
 .glyph-core {
-  fill: var(--pal-c);
+  fill: currentColor;
 }
 
 .css-surface {
   position: relative;
-  width: 300px;
-  height: 300px;
-  overflow: hidden;
-  background:
-    radial-gradient(circle at 35% 32%, var(--pal-c), transparent 20%),
-    radial-gradient(circle at 70% 70%, var(--pal-b), transparent 30%),
-    conic-gradient(from 40deg, var(--pal-a), var(--pal-b), var(--pal-c), var(--pal-a));
-  border-radius: 44% 56% 47% 53%;
-  filter: blur(0.1px) drop-shadow(0 0 28px var(--pal-a));
+  width: 640px;
+  height: 640px;
+  overflow: visible;
+  color: var(--pal-c);
 }
 
-.css-surface span,
-.css-surface i,
-.css-surface b {
+.css-mark {
   position: absolute;
-  inset: 28px;
-  border: 2px solid rgba(255, 255, 255, 0.34);
-  border-radius: 50%;
+  left: 50%;
+  top: 50%;
+  display: block;
+  background: currentColor;
+  opacity: var(--a);
   mix-blend-mode: screen;
+  transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y)));
 }
 
-.css-surface i {
-  inset: 78px 34px 42px 90px;
-  background: repeating-linear-gradient(90deg, transparent 0 8px, rgba(255, 255, 255, 0.45) 8px 11px);
-  border: 0;
-  transform: rotate(-22deg);
+.css-circle {
+  width: var(--s);
+  height: var(--s);
+  border-radius: 50%;
 }
 
-.css-surface b {
-  inset: 42px 100px 90px 30px;
-  background: linear-gradient(135deg, transparent, rgba(255, 255, 255, 0.62));
-  border: 0;
-  border-radius: 38% 62% 70% 30%;
+.css-bar {
+  width: var(--w);
+  height: var(--h);
+  border-radius: 2px;
 }
 
 .pattern-surface {
-  width: 260px;
-  height: 180px;
+  width: 400px;
+  height: 320px;
   color: var(--pal-c);
-  filter: drop-shadow(0 0 20px var(--pal-b));
+  filter: drop-shadow(0 0 3px var(--pal-b));
 }
 
 /* 8. Responsive chrome

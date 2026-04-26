@@ -33,7 +33,7 @@
               <span></span><i></i><b></b>
             </div>
             <div id="pattern-surface" class="surface-source pattern-surface">
-              <svg viewBox="0 0 260 180" role="img" aria-label="Prism pattern tile">
+              <svg viewBox="0 0 400 320" role="img" aria-label="Prism pattern tile">
                 <defs>
                   <radialGradient id="patternGlow" cx="50%" cy="50%" r="70%">
                     <stop offset="0%" stop-color="var(--pal-c)" stop-opacity="0.9" />
@@ -44,10 +44,33 @@
                     <path d="M13 0V26M0 13H26" stroke="var(--pal-b)" stroke-opacity="0.28" stroke-width="1" />
                   </pattern>
                 </defs>
-                <rect width="260" height="180" rx="14" fill="url(#patternGlow)" />
-                <rect width="260" height="180" rx="14" fill="url(#dotGrid)" opacity="0.9" />
-                <path d="M0 34H260M0 90H260M0 146H260" stroke="var(--pal-c)" stroke-opacity="0.32" stroke-width="2" />
-                <path d="M44 0 216 180M216 0 44 180" stroke="var(--pal-a)" stroke-opacity="0.2" stroke-width="3" />
+                <g transform="translate(200 160)" fill="currentColor">
+                  <circle cx="-120" cy="-120" r="14" />
+                  <circle cx="-60" cy="-120" r="14" />
+                  <circle cx="0" cy="-120" r="14" />
+                  <circle cx="60" cy="-120" r="14" />
+                  <circle cx="120" cy="-120" r="14" />
+                  <circle cx="-120" cy="-60" r="14" />
+                  <circle cx="-60" cy="-60" r="14" />
+                  <circle cx="0" cy="-60" r="14" />
+                  <circle cx="60" cy="-60" r="14" />
+                  <circle cx="120" cy="-60" r="14" />
+                  <circle cx="-120" cy="0" r="14" />
+                  <circle cx="-60" cy="0" r="14" />
+                  <circle cx="0" cy="0" r="14" />
+                  <circle cx="60" cy="0" r="14" />
+                  <circle cx="120" cy="0" r="14" />
+                  <circle cx="-120" cy="60" r="14" />
+                  <circle cx="-60" cy="60" r="14" />
+                  <circle cx="0" cy="60" r="14" />
+                  <circle cx="60" cy="60" r="14" />
+                  <circle cx="120" cy="60" r="14" />
+                  <circle cx="-120" cy="120" r="14" />
+                  <circle cx="-60" cy="120" r="14" />
+                  <circle cx="0" cy="120" r="14" />
+                  <circle cx="60" cy="120" r="14" />
+                  <circle cx="120" cy="120" r="14" />
+                </g>
               </svg>
             </div>
           </section>
@@ -68,10 +91,24 @@
 
     <div class="toolbar-stack">
       <div class="subbar show" id="subbar" role="group" aria-label="Surface options">
-        <span class="input-wrap">
-          <input class="text-input" id="typeInput" type="text" maxlength="16" value="SURFACE" autocomplete="off" spellcheck="false" />
-          <span class="blink"></span>
-        </span>
+        <button class="sub-chip" type="button" data-glyph="diamond" aria-pressed="true" aria-label="diamond">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 14.5 8 8 14.5 1.5 8Z"/></svg>
+        </button>
+        <button class="sub-chip" type="button" data-glyph="triangle" aria-pressed="false" aria-label="triangle">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2 14 13 2 13Z"/></svg>
+        </button>
+        <button class="sub-chip" type="button" data-glyph="circle" aria-pressed="false" aria-label="circle">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6"/></svg>
+        </button>
+        <button class="sub-chip" type="button" data-glyph="star" aria-pressed="false" aria-label="star">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M8 1.5 9.8 6.2 14.5 6.5 10.8 9.4 12.1 14 8 11.4 3.9 14 5.2 9.4 1.5 6.5 6.2 6.2Z"/></svg>
+        </button>
+        <button class="sub-chip" type="button" data-glyph="cross" aria-pressed="false" aria-label="cross">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 2 V14 M2 8 H14"/></svg>
+        </button>
+        <button class="sub-chip" type="button" data-glyph="hexagon" aria-pressed="false" aria-label="hexagon">
+          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.8 14 5.2 14 10.8 8 14.2 2 10.8 2 5.2Z"/></svg>
+        </button>
       </div>
 
       <div class="toolbar" id="toolbar" role="toolbar" aria-label="Prism Atelier controls">
