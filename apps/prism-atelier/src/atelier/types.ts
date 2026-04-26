@@ -2,6 +2,12 @@ export type SourceKind = "glyph" | "type" | "css" | "pattern";
 
 export type ModeKind = "extrude" | "orbit" | "trail" | "split" | "grid";
 
+export type GlyphShape = "diamond" | "triangle" | "circle" | "star" | "cross" | "hexagon";
+
+export type CssStyle = "radial" | "linear" | "blob";
+
+export type PatternStyle = "dots" | "lines" | "grid";
+
 export type PaletteName = "VOID" | "NEON" | "MONO" | "DUSK" | "SOLAR";
 
 export type Palette = Readonly<{
@@ -24,6 +30,9 @@ export type AtelierState = {
   mode: ModeKind;
   paletteName: PaletteName;
   word: string;
+  glyphShape: GlyphShape;
+  cssStyle: CssStyle;
+  patternStyle: PatternStyle;
   seed: number;
   px: number;
   py: number;
