@@ -67,25 +67,29 @@ export function disposeAtelierSurfaces(surfaces: AtelierSurfaces): void {
 
 export function updateTypeSurface(word: string): void {
   const element = getElement("type-surface");
-  element.textContent = word || " ";
-  element.dataset.textLength = String(word.length);
+  const normalized = word.trim() || "PRISM";
+  element.textContent = normalized;
+  element.dataset.textLength = String(normalized.length);
 }
 
 export function updateGlyphSurface(shape: GlyphShape): void {
   const element = getElement("glyph-surface");
   element.dataset.shape = shape;
+  // These templates are selected from closed internal enums, not user input.
   element.innerHTML = glyphSvg(shape);
 }
 
 export function updateCssSurface(style: CssStyle): void {
   const element = getElement("css-surface");
   element.dataset.style = style;
+  // These templates are selected from closed internal enums, not user input.
   element.innerHTML = cssMarkup(style);
 }
 
 export function updatePatternSurface(style: PatternStyle): void {
   const element = getElement("pattern-surface");
   element.dataset.style = style;
+  // These templates are selected from closed internal enums, not user input.
   element.innerHTML = patternSvg(style);
 }
 
@@ -199,35 +203,17 @@ function patternContent(style: PatternStyle): string {
           <circle cx="0" cy="0" r="36" fill="currentColor" />
         </g>`;
     case "dots":
-      return `
-        <g transform="translate(200 160)" fill="currentColor">
-          <circle cx="-120" cy="-120" r="14" />
-          <circle cx="-60" cy="-120" r="14" />
-          <circle cx="0" cy="-120" r="14" />
-          <circle cx="60" cy="-120" r="14" />
-          <circle cx="120" cy="-120" r="14" />
-          <circle cx="-120" cy="-60" r="14" />
-          <circle cx="-60" cy="-60" r="14" />
-          <circle cx="0" cy="-60" r="14" />
-          <circle cx="60" cy="-60" r="14" />
-          <circle cx="120" cy="-60" r="14" />
-          <circle cx="-120" cy="0" r="14" />
-          <circle cx="-60" cy="0" r="14" />
-          <circle cx="0" cy="0" r="14" />
-          <circle cx="60" cy="0" r="14" />
-          <circle cx="120" cy="0" r="14" />
-          <circle cx="-120" cy="60" r="14" />
-          <circle cx="-60" cy="60" r="14" />
-          <circle cx="0" cy="60" r="14" />
-          <circle cx="60" cy="60" r="14" />
-          <circle cx="120" cy="60" r="14" />
-          <circle cx="-120" cy="120" r="14" />
-          <circle cx="-60" cy="120" r="14" />
-          <circle cx="0" cy="120" r="14" />
-          <circle cx="60" cy="120" r="14" />
-          <circle cx="120" cy="120" r="14" />
-        </g>`;
+      return dotPattern();
   }
+}
+
+function dotPattern(): string {
+  const positions = [-120, -60, 0, 60, 120];
+  const circles = positions
+    .flatMap((x) => positions.map((y) => `<circle cx="${String(x)}" cy="${String(y)}" r="14" />`))
+    .join("");
+
+  return `<g transform="translate(200 160)" fill="currentColor">${circles}</g>`;
 }
 
 function getElement(id: string): HTMLElement {

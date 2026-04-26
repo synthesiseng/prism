@@ -13,14 +13,15 @@
 
     <button class="palette-tag" id="paletteTag" type="button" aria-label="Cycle palette">
       <span class="swatches" id="paletteSwatches"><i></i><i></i><i></i></span>
-      <span class="label" id="paletteLabel">VOID</span>
+      <span class="label" id="paletteLabel">NEON</span>
     </button>
 
-    <main class="stage" id="stage">
+    <main class="stage" id="stage" aria-label="Prism Atelier creative canvas">
       <div class="canvas-wrap">
         <canvas id="atelier-canvas" aria-label="Prism Atelier canvas">
-          <section id="source-root" aria-label="DOM-authored Prism source surfaces">
-            <div id="type-surface" class="surface-source type-surface">SURFACE</div>
+          <!-- These DOM-authored elements are registered as Prism source surfaces. -->
+          <section id="source-root" aria-label="DOM-authored Prism source surfaces" aria-hidden="true">
+            <div id="type-surface" class="surface-source type-surface">PRISM</div>
             <div id="glyph-surface" class="surface-source glyph-surface">
               <svg viewBox="0 0 240 240" role="img" aria-label="Prism glyph">
                 <path class="glyph-line outer" d="M120 18 222 120 120 222 18 120Z" />
@@ -34,16 +35,6 @@
             </div>
             <div id="pattern-surface" class="surface-source pattern-surface">
               <svg viewBox="0 0 400 320" role="img" aria-label="Prism pattern tile">
-                <defs>
-                  <radialGradient id="patternGlow" cx="50%" cy="50%" r="70%">
-                    <stop offset="0%" stop-color="var(--pal-c)" stop-opacity="0.9" />
-                    <stop offset="100%" stop-color="var(--pal-a)" stop-opacity="0.08" />
-                  </radialGradient>
-                  <pattern id="dotGrid" width="26" height="26" patternUnits="userSpaceOnUse">
-                    <circle cx="4" cy="4" r="2.4" fill="var(--pal-a)" />
-                    <path d="M13 0V26M0 13H26" stroke="var(--pal-b)" stroke-opacity="0.28" stroke-width="1" />
-                  </pattern>
-                </defs>
                 <g transform="translate(200 160)" fill="currentColor">
                   <circle cx="-120" cy="-120" r="14" />
                   <circle cx="-60" cy="-120" r="14" />
@@ -91,35 +82,30 @@
 
     <div class="toolbar-stack">
       <div class="subbar show" id="subbar" role="group" aria-label="Surface options">
-        <button class="sub-chip" type="button" data-glyph="diamond" aria-pressed="true" aria-label="diamond">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.5 14.5 8 8 14.5 1.5 8Z"/></svg>
-        </button>
-        <button class="sub-chip" type="button" data-glyph="triangle" aria-pressed="false" aria-label="triangle">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 2 14 13 2 13Z"/></svg>
-        </button>
-        <button class="sub-chip" type="button" data-glyph="circle" aria-pressed="false" aria-label="circle">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><circle cx="8" cy="8" r="6"/></svg>
-        </button>
-        <button class="sub-chip" type="button" data-glyph="star" aria-pressed="false" aria-label="star">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round"><path d="M8 1.5 9.8 6.2 14.5 6.5 10.8 9.4 12.1 14 8 11.4 3.9 14 5.2 9.4 1.5 6.5 6.2 6.2Z"/></svg>
-        </button>
-        <button class="sub-chip" type="button" data-glyph="cross" aria-pressed="false" aria-label="cross">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M8 2 V14 M2 8 H14"/></svg>
-        </button>
-        <button class="sub-chip" type="button" data-glyph="hexagon" aria-pressed="false" aria-label="hexagon">
-          <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M8 1.8 14 5.2 14 10.8 8 14.2 2 10.8 2 5.2Z"/></svg>
-        </button>
+        <span class="input-wrap">
+          <input
+            class="text-input"
+            id="typeInput"
+            type="text"
+            maxlength="16"
+            placeholder="type anything..."
+            value="PRISM"
+            autocomplete="off"
+            spellcheck="false"
+          />
+          <span class="blink"></span>
+        </span>
       </div>
 
       <div class="toolbar" id="toolbar" role="toolbar" aria-label="Prism Atelier controls">
         <div class="group" id="surfaces" role="group" aria-label="Surface">
-          <button class="chip" type="button" data-source="glyph" aria-pressed="true" data-tip="GLYPH">
+          <button class="chip" type="button" data-source="glyph" aria-pressed="false" data-tip="GLYPH">
             <span class="ico" aria-hidden="true">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.4"><path d="M8 1.4 14.6 8 8 14.6 1.4 8Z"/><path d="M8 4.2 11.8 8 8 11.8 4.2 8Z"/></svg>
             </span>
             <span class="label">GLYPH</span>
           </button>
-          <button class="chip" type="button" data-source="type" aria-pressed="false" data-tip="TYPE">
+          <button class="chip" type="button" data-source="type" aria-pressed="true" data-tip="TYPE">
             <span class="ico" aria-hidden="true">
               <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M3 4V3H13V4"/><path d="M8 3V13"/><path d="M6 13H10"/></svg>
             </span>
@@ -142,11 +128,11 @@
         <span class="divider" aria-hidden="true"></span>
 
         <div class="group" id="effects" role="group" aria-label="Effect">
-          <button class="chip effect-chip" type="button" data-mode="extrude" aria-pressed="true"><span class="label">EXTRUDE</span></button>
+          <button class="chip effect-chip" type="button" data-mode="extrude" aria-pressed="false"><span class="label">EXTRUDE</span></button>
           <button class="chip effect-chip" type="button" data-mode="orbit" aria-pressed="false"><span class="label">ORBIT</span></button>
           <button class="chip effect-chip" type="button" data-mode="trail" aria-pressed="false"><span class="label">TRAIL</span></button>
           <button class="chip effect-chip" type="button" data-mode="split" aria-pressed="false"><span class="label">SPLIT</span></button>
-          <button class="chip effect-chip" type="button" data-mode="grid" aria-pressed="false"><span class="label">GRID</span></button>
+          <button class="chip effect-chip" type="button" data-mode="grid" aria-pressed="true"><span class="label">GRID</span></button>
         </div>
 
         <span class="divider" aria-hidden="true"></span>
@@ -162,7 +148,7 @@
           </svg>
         </button>
 
-        <button class="export" id="export" type="button">
+        <button class="export" id="export" type="button" aria-label="Export PNG">
           <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.6">
             <path d="M8 2V11" />
             <path d="M4.5 7.5 8 11 11.5 7.5"/>
@@ -174,7 +160,7 @@
       </div>
     </div>
 
-    <div class="meta" id="meta">1 DOM SURFACE · 28 CANVAS DRAWS</div>
+    <div class="meta" id="meta">1 DOM SURFACE · 35 CANVAS DRAWS · TYPE / GRID</div>
 
     <script type="module" src="/src/main.ts"></script>
   </body>
