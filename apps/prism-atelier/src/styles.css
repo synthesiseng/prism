@@ -1,0 +1,772 @@
+/* 1. Theme tokens
+   Palette variables are shared by UI chrome and registered DOM surfaces. */
+:root {
+  --bg: #0a0a0c;
+  --fg: #f4f4f5;
+  --muted: #6b6b73;
+  --glass: rgba(12, 12, 14, 0.62);
+  --glass-line: rgba(255, 255, 255, 0.09);
+  --pal-a: #7c5cff;
+  --pal-b: #5dd6ff;
+  --pal-c: #ffffff;
+  --pal-bg: #07070a;
+}
+
+/* 2. Page reset
+   Atelier is a canvas-first instrument; scrolling and selection are disabled. */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  overflow: hidden;
+}
+
+body {
+  background: var(--pal-bg);
+  color: var(--fg);
+  font-family:
+    "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", monospace;
+  user-select: none;
+  touch-action: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 3. Canvas stage
+   The canvas fills the viewport; CSS here frames the studio, not the artwork. */
+.stage {
+  position: fixed;
+  inset: 0;
+  overflow: hidden;
+  cursor: crosshair;
+}
+
+.stage::before {
+  content: "";
+  position: absolute;
+  inset: -2px;
+  z-index: 5;
+  pointer-events: none;
+  background: radial-gradient(ellipse at center, transparent 55%, rgba(0, 0, 0, 0.55) 100%);
+}
+
+.stage::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 6;
+  pointer-events: none;
+  opacity: 0.5;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='160' height='160'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 0.06 0'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+}
+
+.canvas-wrap {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  perspective: 1200px;
+}
+
+#atelier-canvas {
+  position: absolute;
+  inset: 0;
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+/* 4. Top identity and palette controls
+   Palette changes update CSS variables that Prism captures from the sources. */
+.wordmark {
+  position: fixed;
+  top: 18px;
+  left: 22px;
+  z-index: 20;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  mix-blend-mode: difference;
+}
+
+.wordmark .pixel {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  grid-template-rows: 1fr 1fr;
+  gap: 1px;
+  width: 10px;
+  height: 10px;
+}
+
+.wordmark .pixel i {
+  display: block;
+  background: currentColor;
+}
+
+.wordmark .pixel i:nth-child(1) {
+  background: #ff3b6b;
+}
+
+.wordmark .pixel i:nth-child(2) {
+  background: #5dd6ff;
+}
+
+.wordmark .pixel i:nth-child(3) {
+  background: #c4ff4d;
+}
+
+.wordmark .pixel i:nth-child(4) {
+  background: #ffffff;
+}
+
+.palette-tag {
+  position: fixed;
+  top: 14px;
+  right: 18px;
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 10px;
+  color: rgba(255, 255, 255, 0.7);
+  font: inherit;
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  mix-blend-mode: difference;
+  transition: background 180ms;
+}
+
+.palette-tag:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.palette-tag:active {
+  transform: scale(0.97);
+}
+
+.palette-tag .swatches {
+  display: inline-flex;
+  gap: 3px;
+}
+
+.palette-tag .swatches i {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 1px;
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.12);
+}
+
+.palette-tag .label {
+  min-width: 44px;
+  text-align: right;
+}
+
+.hint {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  z-index: 15;
+  color: rgba(255, 255, 255, 0.32);
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  text-align: center;
+  pointer-events: none;
+  mix-blend-mode: difference;
+  opacity: 0;
+  transform: translate(-50%, -50%) translateY(38vh);
+  animation: hintIn 800ms cubic-bezier(0.2, 0.8, 0.2, 1) 600ms forwards;
+}
+
+@keyframes hintIn {
+  from {
+    opacity: 0;
+    transform: translate(-50%, -50%) translateY(40vh);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, -50%) translateY(38vh);
+  }
+}
+
+.hint.fade {
+  animation: hintOut 400ms forwards;
+}
+
+@keyframes hintOut {
+  to {
+    opacity: 0;
+  }
+}
+
+/* 5. Bottom instrument dock
+   Controls mutate app state; registered Prism surfaces stay reusable. */
+.toolbar-stack {
+  position: fixed;
+  bottom: 22px;
+  left: 50%;
+  z-index: 30;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  pointer-events: none;
+  transform: translateX(-50%);
+}
+
+.toolbar-stack > * {
+  pointer-events: auto;
+}
+
+.toolbar,
+.subbar {
+  backdrop-filter: blur(18px) saturate(140%);
+  -webkit-backdrop-filter: blur(18px) saturate(140%);
+}
+
+.toolbar {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  padding: 6px;
+  background: var(--glass);
+  border: 1px solid var(--glass-line);
+  border-radius: 999px;
+  box-shadow:
+    0 14px 40px rgba(0, 0, 0, 0.55),
+    inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  transition:
+    opacity 220ms ease,
+    transform 220ms ease;
+}
+
+.toolbar.exporting {
+  opacity: 0.4;
+}
+
+.subbar {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  max-width: calc(100vw - 32px);
+  padding: 5px 7px;
+  background: rgba(8, 8, 10, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 999px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  opacity: 0;
+  transform: translateY(6px) scale(0.96);
+  transition:
+    opacity 220ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 220ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+.subbar.show {
+  opacity: 1;
+  transform: translateY(0) scale(1);
+}
+
+.text-input {
+  width: 200px;
+  padding: 6px 12px;
+  color: var(--pal-a);
+  font: inherit;
+  font-size: 11px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  caret-color: var(--pal-a);
+  background: transparent;
+  border: 0;
+  outline: none;
+}
+
+.input-wrap {
+  display: inline-flex;
+  gap: 6px;
+  align-items: center;
+  padding: 0 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-radius: 999px;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
+}
+
+.input-wrap::before {
+  margin-left: 4px;
+  color: var(--pal-a);
+  font-size: 13px;
+  content: "›";
+  opacity: 0.7;
+}
+
+.input-wrap .blink {
+  width: 6px;
+  height: 12px;
+  margin-right: 4px;
+  background: var(--pal-a);
+  opacity: 0.7;
+  animation: blink 1s steps(2) infinite;
+}
+
+@keyframes blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.group {
+  display: flex;
+  gap: 2px;
+  align-items: center;
+  padding: 2px;
+}
+
+.divider {
+  width: 1px;
+  height: 18px;
+  margin: 0 4px;
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.chip {
+  position: relative;
+  display: inline-flex;
+  gap: 7px;
+  align-items: center;
+  padding: 8px 12px;
+  color: rgba(255, 255, 255, 0.6);
+  font: inherit;
+  font-size: 10.5px;
+  font-weight: 500;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  transition:
+    color 180ms,
+    background 180ms,
+    transform 180ms;
+}
+
+.chip:hover {
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.chip[aria-pressed="true"] {
+  color: var(--pal-a);
+  background: rgba(255, 255, 255, 0.06);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+}
+
+.effect-chip[aria-pressed="true"] {
+  color: #0a0a0c;
+  background: var(--pal-a);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.18),
+    0 0 24px -4px var(--pal-a);
+}
+
+.chip .ico {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  color: currentColor;
+}
+
+.chip .ico svg {
+  display: block;
+  width: 14px;
+  height: 14px;
+}
+
+.chip[data-tip]::after {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  padding: 4px 7px;
+  color: #ffffff;
+  font-size: 9px;
+  letter-spacing: 0.22em;
+  white-space: nowrap;
+  pointer-events: none;
+  content: attr(data-tip);
+  background: rgba(20, 20, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 4px;
+  opacity: 0;
+  transform: translateX(-50%) translateY(2px);
+  transition:
+    opacity 140ms,
+    transform 140ms;
+}
+
+.chip[data-tip]:hover::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+.icon-btn {
+  position: relative;
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  background: transparent;
+  border: 0;
+  border-radius: 999px;
+  transition:
+    background 180ms,
+    transform 120ms;
+}
+
+.icon-btn:hover {
+  background: rgba(255, 255, 255, 0.06);
+}
+
+.icon-btn:active {
+  transform: scale(0.94);
+}
+
+.icon-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.randomize {
+  width: 42px;
+  height: 42px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.randomize:hover {
+  background: rgba(255, 255, 255, 0.09);
+  box-shadow: 0 0 0 4px rgba(255, 255, 255, 0.04);
+}
+
+.randomize.spin svg {
+  animation: rollDie 500ms cubic-bezier(0.2, 0.9, 0.3, 1.4);
+}
+
+@keyframes rollDie {
+  50% {
+    transform: rotate(220deg) scale(1.1);
+  }
+  100% {
+    transform: rotate(360deg) scale(1);
+  }
+}
+
+.export {
+  position: relative;
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  min-width: 90px;
+  height: 36px;
+  padding: 0 14px 0 12px;
+  overflow: hidden;
+  color: rgba(255, 255, 255, 0.95);
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+}
+
+.export:hover {
+  background: rgba(255, 255, 255, 0.09);
+}
+
+.export svg {
+  width: 14px;
+  height: 14px;
+}
+
+.export .ring {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  border-radius: 999px;
+  opacity: 0;
+}
+
+.export.exporting .ring {
+  background: conic-gradient(from -90deg, var(--pal-a) 0deg, transparent 60deg);
+  opacity: 1;
+  -webkit-mask: radial-gradient(circle, transparent calc(50% - 1.5px), #000 calc(50% - 1px));
+  mask: radial-gradient(circle, transparent calc(50% - 1.5px), #000 calc(50% - 1px));
+  animation: spinRing 700ms linear;
+}
+
+@keyframes spinRing {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.export.done {
+  color: #0a0a0c;
+  background: var(--pal-a);
+}
+
+/* 6. Runtime status and native backend gate
+   The readout explains repeated DOM-surface draws; fallback mode is gated. */
+.meta {
+  position: fixed;
+  bottom: 6px;
+  left: 50%;
+  z-index: 25;
+  color: rgba(255, 255, 255, 0.28);
+  font-size: 9px;
+  letter-spacing: 0.32em;
+  white-space: nowrap;
+  pointer-events: none;
+  mix-blend-mode: difference;
+  transform: translateX(-50%);
+}
+
+.flash {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  pointer-events: none;
+  background: var(--pal-a);
+  opacity: 0;
+}
+
+.flash.go {
+  animation: flashGo 380ms cubic-bezier(0.2, 0.8, 0.2, 1);
+}
+
+@keyframes flashGo {
+  18% {
+    opacity: 0.32;
+  }
+}
+
+.native-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 40;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(3, 3, 6, 0.72);
+  backdrop-filter: blur(18px);
+}
+
+.native-gate[hidden] {
+  display: none;
+}
+
+.native-gate > div {
+  max-width: 520px;
+  color: rgba(255, 255, 255, 0.72);
+  text-align: center;
+}
+
+.native-gate p {
+  color: var(--pal-a);
+  font-size: 10px;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+}
+
+.native-gate h1 {
+  margin: 10px 0;
+  color: #ffffff;
+  font-size: 24px;
+  letter-spacing: 0;
+}
+
+.native-gate code {
+  color: var(--pal-c);
+}
+
+/* 7. Prism source surfaces
+   These ordinary DOM nodes are registered as canvas-drawable material. */
+.surface-source {
+  width: max-content;
+  height: max-content;
+  color: var(--pal-c);
+}
+
+.type-surface {
+  width: 760px;
+  height: 210px;
+  display: grid;
+  place-items: center;
+  color: transparent;
+  font-size: 116px;
+  font-weight: 800;
+  line-height: 0.9;
+  letter-spacing: -0.06em;
+  text-align: center;
+  text-transform: uppercase;
+  background:
+    radial-gradient(circle at 20% 20%, var(--pal-c), transparent 35%),
+    linear-gradient(95deg, var(--pal-a), var(--pal-b) 52%, var(--pal-c));
+  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.46);
+  -webkit-background-clip: text;
+  background-clip: text;
+  filter:
+    drop-shadow(0 0 18px color-mix(in srgb, var(--pal-a), transparent 18%))
+    drop-shadow(0 0 42px color-mix(in srgb, var(--pal-b), transparent 50%));
+}
+
+.glyph-surface {
+  width: 240px;
+  height: 240px;
+  color: var(--pal-c);
+  filter: drop-shadow(0 0 22px var(--pal-a));
+}
+
+.glyph-surface svg,
+.pattern-surface svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.glyph-line {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+.glyph-line.outer {
+  stroke-width: 7;
+}
+
+.glyph-line.inner {
+  stroke: var(--pal-a);
+  stroke-width: 4;
+}
+
+.glyph-line.axis {
+  stroke: var(--pal-b);
+  stroke-width: 2;
+  opacity: 0.7;
+}
+
+.glyph-core {
+  fill: var(--pal-c);
+}
+
+.css-surface {
+  position: relative;
+  width: 300px;
+  height: 300px;
+  overflow: hidden;
+  background:
+    radial-gradient(circle at 35% 32%, var(--pal-c), transparent 20%),
+    radial-gradient(circle at 70% 70%, var(--pal-b), transparent 30%),
+    conic-gradient(from 40deg, var(--pal-a), var(--pal-b), var(--pal-c), var(--pal-a));
+  border-radius: 44% 56% 47% 53%;
+  filter: blur(0.1px) drop-shadow(0 0 28px var(--pal-a));
+}
+
+.css-surface span,
+.css-surface i,
+.css-surface b {
+  position: absolute;
+  inset: 28px;
+  border: 2px solid rgba(255, 255, 255, 0.34);
+  border-radius: 50%;
+  mix-blend-mode: screen;
+}
+
+.css-surface i {
+  inset: 78px 34px 42px 90px;
+  background: repeating-linear-gradient(90deg, transparent 0 8px, rgba(255, 255, 255, 0.45) 8px 11px);
+  border: 0;
+  transform: rotate(-22deg);
+}
+
+.css-surface b {
+  inset: 42px 100px 90px 30px;
+  background: linear-gradient(135deg, transparent, rgba(255, 255, 255, 0.62));
+  border: 0;
+  border-radius: 38% 62% 70% 30%;
+}
+
+.pattern-surface {
+  width: 260px;
+  height: 180px;
+  color: var(--pal-c);
+  filter: drop-shadow(0 0 20px var(--pal-b));
+}
+
+/* 8. Responsive chrome
+   Small screens compress controls while the artwork remains canvas-led. */
+@media (max-width: 760px) {
+  .toolbar {
+    max-width: calc(100vw - 24px);
+    gap: 2px;
+    padding: 5px;
+  }
+
+  .chip {
+    padding: 7px 8px;
+    font-size: 9px;
+    letter-spacing: 0.12em;
+  }
+
+  .chip .label {
+    display: none;
+  }
+
+  .effect-chip .label {
+    display: inline;
+  }
+
+  .divider {
+    margin: 0 2px;
+  }
+
+  .export {
+    min-width: 36px;
+    padding: 0 10px;
+  }
+
+  .export .label {
+    display: none;
+  }
+
+  .wordmark {
+    font-size: 10px;
+  }
+
+  .palette-tag {
+    font-size: 9px;
+    letter-spacing: 0.2em;
+  }
+
+  .meta {
+    font-size: 8px;
+    letter-spacing: 0.18em;
+  }
+}
