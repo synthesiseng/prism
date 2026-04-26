@@ -4,8 +4,6 @@
   Native-first HTML-in-Canvas runtime for managed DOM surfaces in canvas applications.
 </p>
 
-Prism does not replace your renderer. It gives canvas applications managed DOM-authored surfaces.
-
 ## What Prism is
 
 Prism is not a canvas engine, UI kit, design tool, app framework, game engine, or charting library.
