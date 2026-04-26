@@ -2,10 +2,10 @@ import type { AtelierState, ModeKind, PaletteName, SourceKind } from "./types";
 
 export function createInitialState(): AtelierState {
   return {
-    source: "glyph",
-    mode: "extrude",
-    paletteName: "VOID",
-    word: "SURFACE",
+    source: "type",
+    mode: "grid",
+    paletteName: "NEON",
+    word: "PRISM",
     glyphShape: "diamond",
     cssStyle: "radial",
     patternStyle: "dots",

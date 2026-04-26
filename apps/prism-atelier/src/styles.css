@@ -1,4 +1,4 @@
-/* 1. Theme tokens
+/* Theme tokens
    Palette variables are shared by UI chrome and registered DOM surfaces. */
 :root {
   --bg: #0a0a0c;
@@ -6,13 +6,13 @@
   --muted: #6b6b73;
   --glass: rgba(12, 12, 14, 0.62);
   --glass-line: rgba(255, 255, 255, 0.09);
-  --pal-a: #7c5cff;
-  --pal-b: #5dd6ff;
-  --pal-c: #ffffff;
-  --pal-bg: #07070a;
+  --pal-a: #ff3b6b;
+  --pal-b: #3bf0d9;
+  --pal-c: #ffe45e;
+  --pal-bg: #0a0410;
 }
 
-/* 2. Page reset
+/* Page reset
    Atelier is a canvas-first instrument; scrolling and selection are disabled. */
 * {
   box-sizing: border-box;
@@ -37,7 +37,18 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 3. Canvas stage
+button,
+input {
+  touch-action: manipulation;
+}
+
+button:focus-visible,
+.text-input:focus-visible {
+  outline: 2px solid var(--pal-b);
+  outline-offset: 3px;
+}
+
+/* Canvas stage
    The canvas fills the viewport; CSS here frames the studio, not the artwork. */
 .stage {
   position: fixed;
@@ -82,7 +93,7 @@ body {
   height: 100%;
 }
 
-/* 4. Top identity and palette controls
+/* Top identity and palette controls
    Palette changes update CSS variables that Prism captures from the sources. */
 .wordmark {
   position: fixed;
@@ -213,7 +224,7 @@ body {
   }
 }
 
-/* 5. Bottom instrument dock
+/* Bottom instrument dock
    Controls mutate app state; registered Prism surfaces stay reusable. */
 .toolbar-stack {
   position: fixed;
@@ -334,6 +345,7 @@ body {
   background: transparent;
   border: 0;
   outline: none;
+  user-select: text;
 }
 
 .input-wrap {
@@ -573,7 +585,7 @@ body {
   background: var(--pal-a);
 }
 
-/* 6. Runtime status and native backend gate
+/* Runtime status and native backend gate
    The readout explains repeated DOM-surface draws; fallback mode is gated. */
 .meta {
   position: fixed;
@@ -585,7 +597,7 @@ body {
   letter-spacing: 0.32em;
   white-space: nowrap;
   pointer-events: none;
-  mix-blend-mode: difference;
+  mix-blend-mode: normal;
   transform: translateX(-50%);
 }
 
@@ -647,7 +659,7 @@ body {
   color: var(--pal-c);
 }
 
-/* 7. Prism source surfaces
+/* Prism source surfaces
    These ordinary DOM nodes are registered as canvas-drawable material. */
 .surface-source {
   width: max-content;
@@ -660,29 +672,23 @@ body {
   height: 210px;
   display: grid;
   place-items: center;
-  color: transparent;
-  font-size: 116px;
-  font-weight: 800;
+  color: currentColor;
+  font-size: 200px;
+  font-weight: 700;
   line-height: 0.9;
-  letter-spacing: -0.06em;
+  letter-spacing: -4px;
   text-align: center;
   text-transform: uppercase;
-  background:
-    radial-gradient(circle at 20% 20%, var(--pal-c), transparent 35%),
-    linear-gradient(95deg, var(--pal-a), var(--pal-b) 52%, var(--pal-c));
-  -webkit-text-stroke: 1px rgba(255, 255, 255, 0.46);
-  -webkit-background-clip: text;
-  background-clip: text;
-  filter:
-    drop-shadow(0 0 2px color-mix(in srgb, var(--pal-a), transparent 18%))
-    drop-shadow(0 0 6px color-mix(in srgb, var(--pal-b), transparent 50%));
+  background: none;
+  -webkit-text-stroke: 0;
+  filter: none;
 }
 
 .glyph-surface {
   width: 240px;
   height: 240px;
   color: var(--pal-c);
-  filter: drop-shadow(0 0 3px var(--pal-a));
+  filter: none;
 }
 
 .glyph-surface svg,
@@ -754,10 +760,10 @@ body {
   width: 400px;
   height: 320px;
   color: var(--pal-c);
-  filter: drop-shadow(0 0 3px var(--pal-b));
+  filter: none;
 }
 
-/* 8. Responsive chrome
+/* Responsive chrome
    Small screens compress controls while the artwork remains canvas-led. */
 @media (max-width: 760px) {
   .toolbar {
