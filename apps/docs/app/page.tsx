@@ -4,7 +4,15 @@ import { PrismDocsSidebar } from "./prism-docs-sidebar";
 import { PrismTopNav } from "./prism-top-nav";
 
 const ownership = {
-  app: ["state", "data", "templates", "transforms", "rendering decisions", "interaction state"],
+  app: [
+    "state",
+    "data",
+    "templates",
+    "transforms",
+    "rendering decisions",
+    "animation loop",
+    "interaction state"
+  ],
   prism: [
     "CanvasRuntime",
     "CanvasSurface registration",
@@ -65,8 +73,9 @@ export default function HomePage() {
                 <span>HTML/CSS canvas surfaces</span>.
               </h1>
               <p>
-                Prism builds on HTML-in-Canvas and gives apps a runtime layer
-                for surface registration, paint lifecycle, coordinate
+                Prism does not replace your renderer. It gives canvas
+                applications managed DOM-authored surfaces, with runtime
+                support for registration, paint lifecycle, coordinate
                 conversion, invalidation, readiness, and cleanup.
               </p>
               <div className="prism-home-actions">
@@ -93,8 +102,9 @@ export default function HomePage() {
               <p>01 · Boundaries</p>
               <h2>What Prism owns</h2>
               <span>
-                Prism is a runtime, not a framework. It manages surfaces, paint,
-                and timing and stays out of your render decisions.
+                Prism is a DOM-surface runtime, not a renderer or framework. It
+                manages surfaces, paint, and timing and stays out of your render
+                decisions.
               </span>
             </div>
 

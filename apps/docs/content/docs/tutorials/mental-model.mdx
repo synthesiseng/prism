@@ -3,7 +3,9 @@ title: Mental Model
 description: What Prism owns, and what remains app-owned.
 ---
 
-Prism is a runtime layer, not an app framework.
+Prism is a DOM-surface runtime layer, not a renderer, UI kit, design tool, app framework, game engine, or charting library.
+
+Prism does not replace your renderer. It gives canvas applications managed DOM-authored surfaces.
 
 ## Prism owns
 
@@ -24,6 +26,8 @@ Prism is a runtime layer, not an app framework.
 - data
 - templates and components
 - transforms
+- drawing model
+- animation loop
 - layout decisions
 - chart, game, or rendering logic
 - UI decisions
@@ -35,3 +39,6 @@ Prism is a runtime layer, not an app framework.
 
 Surface bounds and input coordinates are CSS pixels. Direct `ctx` drawing inside `onPaint()` uses backing-store pixels.
 
+## Current scope
+
+Prism v1 is 2D-first. WebGL/WebGPU and renderer integrations are future-facing, not the current public API center.
