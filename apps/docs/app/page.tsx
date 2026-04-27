@@ -45,6 +45,12 @@ const examples = [
     variant: "composer"
   },
   {
+    href: "/docs/examples/prism-atelier",
+    title: "Prism Atelier",
+    body: "DOM-authored HTML/CSS/SVG surfaces used as repeated canvas material for generative artwork.",
+    variant: "atelier"
+  },
+  {
     href: "/docs/examples/pie-chart",
     title: "Pie Chart",
     body: "Minimal canvas/data example adapted from the WICG HTML-in-Canvas repo.",
@@ -145,7 +151,7 @@ export default function HomePage() {
               <p>03 · Reference apps</p>
               <h2>Examples</h2>
               <span>
-                Three apps built on Prism. Start with the one closest to what
+                Four apps built on Prism. Start with the one closest to what
                 you are shipping.
               </span>
             </div>
@@ -227,6 +233,56 @@ function ExamplePreview({ variant }: { variant: (typeof examples)[number]["varia
           <rect x="122" y="44" width="84" height="46" rx="4" fill="#0f172a" stroke="#22d3ee" transform="rotate(-4 164 67)" />
           <circle cx="32" cy="22" r="3" fill="#a78bfa" />
           <circle cx="210" cy="91" r="3" fill="#22d3ee" />
+        </svg>
+      </div>
+    );
+  }
+
+  if (variant === "atelier") {
+    return (
+      <div className="prism-example-preview">
+        <svg viewBox="0 0 240 110" aria-hidden="true">
+          <rect width="240" height="110" rx="6" fill="#0a0410" />
+          <text
+            x="20"
+            y="46"
+            fill="#ff3b6b"
+            fontFamily="monospace"
+            fontSize="24"
+            fontWeight="700"
+            letterSpacing="-1"
+            opacity="0.9"
+          >
+            PRISM
+          </text>
+          <text
+            x="80"
+            y="48"
+            fill="#3bf0d9"
+            fontFamily="monospace"
+            fontSize="24"
+            fontWeight="700"
+            letterSpacing="-1"
+            opacity="0.85"
+          >
+            PRISM
+          </text>
+          <text
+            x="142"
+            y="45"
+            fill="#ffe45e"
+            fontFamily="monospace"
+            fontSize="24"
+            fontWeight="700"
+            letterSpacing="-1"
+            opacity="0.75"
+          >
+            PRISM
+          </text>
+          <circle cx="48" cy="74" r="5" fill="#ff3b6b" />
+          <circle cx="68" cy="78" r="5" fill="#3bf0d9" />
+          <circle cx="88" cy="74" r="5" fill="#ffe45e" />
+          <path d="M164 70 184 90 204 70 184 50Z" fill="none" stroke="#3bf0d9" strokeWidth="2" />
         </svg>
       </div>
     );
