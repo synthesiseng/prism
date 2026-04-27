@@ -1,0 +1,16 @@
+---
+title: Prism Atelier
+description: A creative-coding example that turns DOM-authored HTML/CSS/SVG surfaces into repeated canvas material.
+---
+
+Prism Atelier demonstrates DOM-authored visual surfaces as canvas material.
+
+The source artwork is ordinary HTML/CSS/SVG: a typographic word surface, an inline SVG glyph, a CSS composition, and an SVG pattern tile. Prism registers those DOM nodes as surfaces, and Atelier composes the selected surface repeatedly inside a canvas paint pass.
+
+The example demonstrates Prism in a creative-coding workflow: the app owns mode, palette, pointer input, transforms, and canvas composition, while Prism owns surface registration, paint lifecycle, readiness, and cleanup for the DOM-authored sources.
+
+Atelier requires native HTML-in-Canvas support. Use a Chromium/Chrome Canary build with the Canvas Draw Element flag enabled:
+
+```txt
+chrome://flags/#canvas-draw-element
+```

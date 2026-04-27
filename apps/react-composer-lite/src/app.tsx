@@ -490,11 +490,10 @@ function NativeSupportGate() {
   return (
     <div className="native-gate" role="alert">
       <div className="native-gate-card">
-        <p className="native-gate-eyebrow">Native support required</p>
-        <h2>Enable HTML-in-Canvas to run Prism Composer.</h2>
+        <p className="native-gate-eyebrow">Native HTML-in-Canvas required</p>
+        <h2>Prism Composer requires native HTML-in-Canvas.</h2>
         <p>
-          This demo depends on native HTML-in-Canvas support. Use a Chromium build with
-          the <code>canvas-draw-element</code> flag enabled.
+          Enable <code>chrome://flags/#canvas-draw-element</code> in Chromium/Chrome Canary.
         </p>
         <div className="native-gate-flag">chrome://flags/#canvas-draw-element</div>
       </div>
