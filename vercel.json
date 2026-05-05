@@ -1,0 +1,5 @@
+{
+  "installCommand": "pnpm install --frozen-lockfile",
+  "buildCommand": "pnpm --filter @prism/example-atlantic --filter @prism/example-atelier --filter @prism/composer-lite build",
+  "outputDirectory": "apps/prism-atlantic/dist"
+}

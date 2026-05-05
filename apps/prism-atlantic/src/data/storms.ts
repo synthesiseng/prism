@@ -1,8 +1,9 @@
-import rawData from "./hurdat2-atlantic.json";
+import rawData from "./atlantic-snapshot.json";
 import type { StormMeta, StormTrack } from "../chart/types";
 
-// Local HURDAT2 snapshot generated from NOAA/NHC source text. The large JSON
-// file is ignored by Git, while the source URL and filters remain auditable.
+// Committed HURDAT2 snapshot generated from NOAA/NHC source text. The full local
+// JSON can be regenerated for data work, while this compact 2010-2025 snapshot
+// keeps the deployed example deterministic and small enough to ship with Git.
 type Hurdat2Snapshot = Readonly<{
   source: Readonly<{
     name: string;
