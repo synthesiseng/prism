@@ -1,6 +1,6 @@
 {
   "name": "@synthesisengineering/prism",
-  "version": "0.1.0-alpha.7",
+  "version": "0.1.0-alpha.8",
   "description": "Native-first HTML-in-Canvas runtime for managing HTML/CSS as canvas surfaces.",
   "license": "MIT",
   "type": "module",
