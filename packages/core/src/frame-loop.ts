@@ -45,6 +45,7 @@ export class FrameLoop {
   private frameHandle: number | null = null;
   private lastTime = 0;
   private frame = 0;
+  private isRunning = false;
 
   /**
    * Creates a frame loop.
@@ -74,33 +75,51 @@ export class FrameLoop {
    * Starts the loop.
    */
   start(): void {
-    if (this.frameHandle !== null) {
+    if (this.isRunning) {
       return;
     }
 
+    this.isRunning = true;
     this.lastTime = performance.now();
-    for (const system of this.systems) {
-      system.start?.();
+    try {
+      for (const system of this.systems) {
+        system.start?.();
+      }
+      this.frameHandle = this.requestFrame(this.tick);
+    } catch (error) {
+      this.isRunning = false;
+      this.frameHandle = null;
+      throw error;
     }
-    this.frameHandle = this.requestFrame(this.tick);
   }
 
   /**
    * Stops the loop.
    */
   stop(): void {
-    if (this.frameHandle === null) {
+    if (!this.isRunning && this.frameHandle === null) {
       return;
     }
 
-    this.cancelFrame(this.frameHandle);
+    this.isRunning = false;
+    const frameHandle = this.frameHandle;
     this.frameHandle = null;
+
+    if (frameHandle !== null) {
+      this.cancelFrame(frameHandle);
+    }
+
     for (const system of [...this.systems].reverse()) {
       system.stop?.();
     }
   }
 
   private readonly tick = (nowMs: number): void => {
+    if (!this.isRunning) {
+      return;
+    }
+
+    this.frameHandle = null;
     const now = nowMs / 1000;
     const previous = this.lastTime / 1000;
     const delta = Math.min(now - previous, this.maxDelta);
@@ -108,13 +127,26 @@ export class FrameLoop {
     this.frame += 1;
 
     const time: FrameTime = { now, delta, frame: this.frame };
-    for (const system of this.systems) {
-      system.update?.(time);
-    }
-    for (const system of this.systems) {
-      system.render?.(time);
+    try {
+      for (const system of this.systems) {
+        system.update?.(time);
+      }
+      for (const system of this.systems) {
+        system.render?.(time);
+      }
+    } catch (error) {
+      this.isRunning = false;
+      throw error;
     }
 
-    this.frameHandle = this.requestFrame(this.tick);
+    // A frame callback may call stop() or destroy() while it is executing.
+    // Re-check running state before scheduling the next frame.
+    if (this.shouldScheduleNextFrame()) {
+      this.frameHandle = this.requestFrame(this.tick);
+    }
   };
+
+  private shouldScheduleNextFrame(): boolean {
+    return this.isRunning;
+  }
 }

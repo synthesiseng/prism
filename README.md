@@ -1,8 +1,22 @@
 <h1 align="center">Prism</h1>
 
 <p align="center">
-  Native-first HTML-in-Canvas runtime for managed DOM surfaces in canvas applications.
+  <a href="https://www.npmjs.com/package/@synthesisengineering/prism">
+    <img src="https://img.shields.io/npm/v/@synthesisengineering/prism?style=flat-square" alt="npm version" />
+  </a>
+  <a href="https://www.npmjs.com/package/@synthesisengineering/prism">
+    <img src="https://img.shields.io/npm/dm/@synthesisengineering/prism?style=flat-square" alt="npm downloads" />
+  </a>
+  <img src="https://img.shields.io/node/v/@synthesisengineering/prism?style=flat-square" alt="node version" />
+  <a href="https://github.com/synthesiseng/prism/actions">
+    <img src="https://img.shields.io/github/actions/workflow/status/synthesiseng/prism/ci.yml?branch=main&style=flat-square" alt="CI status" />
+  </a>
+  <a href="https://github.com/synthesiseng/prism/blob/main/LICENSE">
+    <img src="https://img.shields.io/github/license/synthesiseng/prism?style=flat-square" alt="license" />
+  </a>
 </p>
+
+Native-first HTML-in-Canvas runtime for managed DOM surfaces in canvas applications.
 
 ## What Prism is
 

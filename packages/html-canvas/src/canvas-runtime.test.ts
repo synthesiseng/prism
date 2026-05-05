@@ -40,6 +40,36 @@ class FakeResizeObserver {
   }
 }
 
+class ManualRaf {
+  private readonly callbacks = new Map<number, FrameRequestCallback>();
+  private nextHandle = 1;
+
+  request = (callback: FrameRequestCallback): number => {
+    const handle = this.nextHandle;
+    this.nextHandle += 1;
+    this.callbacks.set(handle, callback);
+    return handle;
+  };
+
+  cancel = (handle: number): void => {
+    this.callbacks.delete(handle);
+  };
+
+  get pendingCount(): number {
+    return this.callbacks.size;
+  }
+
+  step(nowMs = 16): void {
+    const [handle, callback] = this.callbacks.entries().next().value ?? [];
+    if (handle === undefined || callback === undefined) {
+      throw new Error("Expected a pending frame callback.");
+    }
+
+    this.callbacks.delete(handle);
+    callback(nowMs);
+  }
+}
+
 class FakeStyle {
   position = "";
   left = "";
@@ -1484,6 +1514,60 @@ describe("CanvasRuntime", () => {
       await expect(runtime.paintOnce()).rejects.toThrow(
         "Cannot paint a destroyed CanvasRuntime. Create a new CanvasRuntime instead."
       );
+    });
+
+    it("does not schedule future frames when destroyed during update", () => {
+      const raf = new ManualRaf();
+      vi.stubGlobal("requestAnimationFrame", raf.request);
+      vi.stubGlobal("cancelAnimationFrame", raf.cancel);
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      let updateCount = 0;
+
+      runtime.onUpdate(() => {
+        updateCount += 1;
+        runtime.destroy();
+      });
+
+      runtime.start();
+
+      expect(raf.pendingCount).toBe(1);
+
+      raf.step();
+
+      expect(updateCount).toBe(1);
+      expect(raf.pendingCount).toBe(0);
+      expect(() => {
+        runtime.destroy();
+      }).not.toThrow();
+    });
+
+    it("does not schedule future frames when destroyed during paint", () => {
+      const raf = new ManualRaf();
+      vi.stubGlobal("requestAnimationFrame", raf.request);
+      vi.stubGlobal("cancelAnimationFrame", raf.cancel);
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      let paintCount = 0;
+
+      runtime.onPaint(() => {
+        paintCount += 1;
+        runtime.destroy();
+      });
+
+      runtime.start();
+
+      expect(raf.pendingCount).toBe(1);
+
+      raf.step();
+
+      expect(paintCount).toBe(1);
+      expect(raf.pendingCount).toBe(0);
+      expect(() => {
+        runtime.destroy();
+      }).not.toThrow();
     });
   });
 });
