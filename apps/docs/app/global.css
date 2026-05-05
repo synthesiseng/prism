@@ -156,17 +156,29 @@
   display: inline-flex;
   font-size: 15px;
   font-weight: 650;
-  gap: 9px;
+  gap: 8px;
   letter-spacing: 0;
   text-decoration: none;
   white-space: nowrap;
 }
 
+.prism-brand-logo {
+  display: block;
+  height: 24px;
+  object-fit: contain;
+  width: 24px;
+}
+
 .prism-brand code {
+  background: var(--prism-bg-muted);
+  border: 1px solid var(--prism-border);
+  border-radius: 999px;
   color: var(--prism-fg-subtle);
   font-family: var(--font-mono), ui-monospace, SFMono-Regular, Menlo, monospace;
-  font-size: 11px;
-  font-weight: 400;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1;
+  padding: 3px 7px;
 }
 
 .prism-nav-links {
@@ -1116,11 +1128,11 @@
   border: 1px solid var(--prism-border);
   border-radius: 10px;
   color: inherit;
-  display: block;
+  display: flex;
+  flex-direction: column;
   min-height: 252px;
   padding: 20px;
   position: relative;
-  text-decoration: none;
   transition:
     border-color 140ms ease,
     box-shadow 140ms ease,
@@ -1166,11 +1178,36 @@
   margin: 0;
 }
 
-.prism-example-arrow {
-  color: var(--prism-fg-subtle);
-  position: absolute;
-  right: 20px;
-  top: 149px;
+.prism-example-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: auto;
+  padding-top: 18px;
+}
+
+.prism-example-actions a {
+  align-items: center;
+  border: 1px solid var(--prism-border);
+  border-radius: 8px;
+  color: var(--prism-fg);
+  display: inline-flex;
+  font-size: 12.5px;
+  font-weight: 560;
+  line-height: 1;
+  padding: 8px 10px;
+  text-decoration: none;
+}
+
+.prism-example-actions a:hover {
+  border-color: var(--prism-border-strong);
+}
+
+.prism-example-actions a[href^="http"] {
+  background: var(--prism-fg);
+  border-color: var(--prism-fg);
+  color: var(--prism-bg);
 }
 
 @media (min-width: 1120px) {

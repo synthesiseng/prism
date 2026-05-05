@@ -85,9 +85,9 @@ Storm tracks come from the NOAA/National Hurricane Center HURDAT2 Atlantic best-
 - Archive: https://www.nhc.noaa.gov/data/hurdat/
 - Snapshot used: `hurdat2-1851-2025-02272026.txt`
 
-The example uses the NHC Atlantic HURDAT2 file published February 27, 2026, covering 1851-2025. The committed deploy snapshot filters that source to 2010-2025 for the visualization.
+The example uses the NHC Atlantic HURDAT2 file published February 27, 2026, covering 1851-2025. The committed deploy snapshot filters that source to 2000-2025 for the visualization.
 
-The app imports a compact committed snapshot at `src/data/atlantic-snapshot.json`. It contains filtered Atlantic storms from 2010-2025 with downsampled track points so Vercel and local builds do not depend on a large generated artifact. Categories are derived from HURDAT2 maximum sustained wind in knots.
+The app imports a compact committed snapshot at `src/data/atlantic-snapshot.json`. It contains filtered Atlantic storms from 2000-2025 with downsampled track points so Vercel and local builds do not depend on a large generated artifact. Categories are derived from HURDAT2 maximum sustained wind in knots.
 
 The full generated local snapshot is `src/data/hurdat2-atlantic.json`. That file is intentionally ignored by Git because it contains tens of thousands of normalized HURDAT2 rows.
 
