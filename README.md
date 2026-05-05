@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="apps/docs/public/prism-logo.png" alt="Prism" width="96" />
+</p>
+
 <h1 align="center">Prism</h1>
 
 <p align="center">
