@@ -32,3 +32,4 @@ AGENTS.md
 # OS files
 .DS_Store
 Thumbs.db
+.vercel

@@ -1,19 +1,11 @@
 <h1 align="center">Prism</h1>
 
 <p align="center">
-  <a href="https://www.npmjs.com/package/@synthesisengineering/prism">
-    <img src="https://img.shields.io/npm/v/@synthesisengineering/prism?style=flat-square" alt="npm version" />
-  </a>
-  <a href="https://www.npmjs.com/package/@synthesisengineering/prism">
-    <img src="https://img.shields.io/npm/dm/@synthesisengineering/prism?style=flat-square" alt="npm downloads" />
-  </a>
-  <img src="https://img.shields.io/node/v/@synthesisengineering/prism?style=flat-square" alt="node version" />
-  <a href="https://github.com/synthesiseng/prism/actions">
-    <img src="https://img.shields.io/github/actions/workflow/status/synthesiseng/prism/ci.yml?branch=main&style=flat-square" alt="CI status" />
-  </a>
-  <a href="https://github.com/synthesiseng/prism/blob/main/LICENSE">
-    <img src="https://img.shields.io/github/license/synthesiseng/prism?style=flat-square" alt="license" />
-  </a>
+  <a href="https://www.npmjs.com/package/@synsoftworks/depgraph-cli"><img alt="npm version" src="https://img.shields.io/npm/v/%40synsoftworks%2Fdepgraph-cli?style=flat-square"></a>
+  <a href="https://www.npmjs.com/package/@synsoftworks/depgraph-cli"><img alt="npm downloads per month" src="https://img.shields.io/npm/dm/%40synsoftworks%2Fdepgraph-cli?style=flat-square"></a>
+  <a href="https://nodejs.org/"><img alt="node version" src="https://img.shields.io/node/v/%40synsoftworks%2Fdepgraph-cli?style=flat-square"></a>
+  <a href="https://github.com/synsoftworks/depgraph-cli/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/synsoftworks/depgraph-cli/actions/workflows/ci.yml/badge.svg"></a>
+  <a href="https://github.com/synsoftworks/depgraph-cli/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/github/license/synsoftworks/depgraph-cli?style=flat-square"></a>
 </p>
 
 Native-first HTML-in-Canvas runtime for managed DOM surfaces in canvas applications.
