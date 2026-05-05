@@ -1,5 +1,5 @@
 {
   "installCommand": "pnpm install --frozen-lockfile",
-  "buildCommand": "pnpm --filter @prism/example-atlantic --filter @prism/example-atelier --filter @prism/composer-lite build && node scripts/prepare-vercel-output.mjs",
+  "buildCommand": "pnpm build && pnpm --filter @prism/example-atlantic --filter @prism/example-atelier --filter @prism/composer-lite build && node scripts/prepare-vercel-output.mjs",
   "outputDirectory": "dist"
 }
