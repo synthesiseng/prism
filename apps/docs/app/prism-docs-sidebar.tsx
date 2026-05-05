@@ -37,6 +37,7 @@ const sections = [
     items: [
       ["Prism Atlantic", "/docs/examples/prism-atlantic"],
       ["React Composer Lite", "/docs/examples/react-composer-lite"],
+      ["Prism Atelier", "/docs/examples/prism-atelier"],
       ["Pie Chart", "/docs/examples/pie-chart"]
     ]
   },

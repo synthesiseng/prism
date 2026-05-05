@@ -4,21 +4,58 @@ import Link from "next/link";
 import { useEffect, useMemo, useRef, useState } from "react";
 
 const searchItems = [
-  ["Introduction", "/docs/tutorials/introduction", "Prism runtime layer and current scope"],
+  [
+    "Introduction",
+    "/docs/tutorials/introduction",
+    "Prism runtime layer and current scope"
+  ],
   ["Quickstart", "/docs/tutorials/quickstart", "Install Prism and draw one HTML surface"],
   ["Installation", "/docs/tutorials/installation", "Package install and browser flags"],
   ["Mental Model", "/docs/tutorials/mental-model", "What Prism owns and what apps own"],
   ["CanvasRuntime", "/docs/explanation/canvas-runtime", "Runtime class and lifecycle"],
-  ["CanvasSurface", "/docs/explanation/canvas-surface", "Surface facade returned by registerSurface"],
-  ["registerSurface()", "/docs/explanation/register-surface", "Register an HTML element as a surface"],
+  [
+    "CanvasSurface",
+    "/docs/explanation/canvas-surface",
+    "Surface facade returned by registerSurface"
+  ],
+  [
+    "registerSurface()",
+    "/docs/explanation/register-surface",
+    "Register an HTML element as a surface"
+  ],
   ["paintOnce()", "/docs/explanation/paint-once", "Wait for one Prism-owned paint pass"],
-  ["Invalidation", "/docs/explanation/invalidation", "Schedule another runtime paint pass"],
+  [
+    "Invalidation",
+    "/docs/explanation/invalidation",
+    "Schedule another runtime paint pass"
+  ],
   ["Cleanup", "/docs/explanation/cleanup", "Dispose surfaces and destroy the runtime"],
   ["Export a PNG", "/docs/how-to/export-png", "Use paintOnce then canvas.toBlob"],
-  ["Convert coordinates", "/docs/how-to/coordinate-conversion", "CSS pixels and backing-store pixels"],
-  ["Sync transforms", "/docs/how-to/sync-transforms", "Keep app transforms aligned with surface bounds"],
-  ["Prism Atlantic", "/docs/examples/prism-atlantic", "NOAA/NHC storm-track data visualization"],
-  ["React Composer Lite", "/docs/examples/react-composer-lite", "React components as Prism surfaces"],
+  [
+    "Convert coordinates",
+    "/docs/how-to/coordinate-conversion",
+    "CSS pixels and backing-store pixels"
+  ],
+  [
+    "Sync transforms",
+    "/docs/how-to/sync-transforms",
+    "Keep app transforms aligned with surface bounds"
+  ],
+  [
+    "Prism Atlantic",
+    "/docs/examples/prism-atlantic",
+    "NOAA/NHC storm-track data visualization"
+  ],
+  [
+    "React Composer Lite",
+    "/docs/examples/react-composer-lite",
+    "React components as Prism surfaces"
+  ],
+  [
+    "Prism Atelier",
+    "/docs/examples/prism-atelier",
+    "DOM-authored surfaces as repeated canvas material"
+  ],
   ["Pie Chart", "/docs/examples/pie-chart", "Minimal WICG-derived canvas/data example"],
   ["API", "/docs/reference/api", "Public package-root API"],
   ["Types", "/docs/reference/types", "Public TypeScript types"]
@@ -80,8 +117,16 @@ export function PrismTopNav() {
     <header className="prism-top-nav">
       <div className="prism-top-nav-inner">
         <Link className="prism-brand" href="/">
+          <img
+            src="/prism-logo.png"
+            alt=""
+            aria-hidden="true"
+            className="prism-brand-logo"
+          />
           Prism
-          <code>v0.4</code>
+          <code title="v0.1.0-alpha.7" aria-label="Version 0.1.0 alpha 7">
+            alpha.7
+          </code>
         </Link>
 
         <nav className="prism-nav-links" aria-label="Primary navigation">
