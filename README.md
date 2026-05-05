@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="apps/docs/public/prism-logo.png" alt="Prism" width="96" />
+  <img src="apps/docs/public/prism-logo.png" alt="Prism" width="94" />
 </p>
 
 <h1 align="center">Prism</h1>
@@ -20,7 +20,7 @@
   </a>
 </p>
 
-Native-first HTML-in-Canvas runtime for managed DOM surfaces in canvas applications.
+Native-first HTML-in-Canvas runtime for managed DOM surfaces in canvas applications. Prism does not replace your renderer. It gives canvas applications managed DOM-authored surfaces.
 
 ## What Prism is
 
@@ -242,6 +242,7 @@ chrome://flags/#canvas-draw-element
 pnpm install
 pnpm typecheck
 pnpm test
+pnpm e2e
 pnpm lint
 pnpm build
 ```
