@@ -15,12 +15,12 @@ Prism is a native-first HTML-in-Canvas runtime. Keep changes aligned with
 Run the full verification set before opening a pull request:
 
 ```sh
-pnpm lint && pnpm typecheck && pnpm test && pnpm build
+pnpm lint && pnpm typecheck && pnpm test && pnpm e2e && pnpm --filter @prism/docs build && pnpm build && npm pack --json
 ```
 
 ## Runtime Direction
 
-- `@prism/html-canvas` is the Prism v1 center.
+- `@synthesisengineering/prism` is the public Prism v1 package entry point.
 - Preserve the native-first HTML-in-Canvas model.
 - Fallback is compatibility-only and must not shape the public API.
 - Public API names should stay plain, boring, and obvious.
@@ -33,7 +33,7 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm build
 - Do not import `packages/html-canvas/src/runtime/*` from outside
   `packages/html-canvas`.
 - Do not document `runtime/*` modules as public API.
-- Use the top-level `@prism/html-canvas` exports in examples and external code.
+- Use the package-root `@synthesisengineering/prism` exports in examples and external code.
 
 ## Documentation
 

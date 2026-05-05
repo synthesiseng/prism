@@ -70,7 +70,7 @@ export default tseslint.config(
                 "../../../../packages/html-canvas/src/runtime/*"
               ],
               message:
-                "html-canvas runtime modules are internal. Use the public @prism/html-canvas entry point and CanvasRuntime façade instead."
+                "html-canvas runtime modules are internal. Use the public @synthesisengineering/prism package root and CanvasRuntime façade instead."
             }
           ]
         }

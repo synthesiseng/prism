@@ -2,12 +2,12 @@
 
 <p align="center">
   <a href="https://www.npmjs.com/package/@synthesisengineering/prism">
-    <img src="https://img.shields.io/npm/v/@synthesisengineering/prism?style=flat-square" alt="npm version" />
+    <img src="https://img.shields.io/npm/v/@synthesisengineering/prism/alpha?style=flat-square" alt="npm alpha version" />
   </a>
   <a href="https://www.npmjs.com/package/@synthesisengineering/prism">
     <img src="https://img.shields.io/npm/dm/@synthesisengineering/prism?style=flat-square" alt="npm downloads" />
   </a>
-  <img src="https://img.shields.io/node/v/@synthesisengineering/prism?style=flat-square" alt="node version" />
+  <img src="https://img.shields.io/badge/node-%3E%3D22-339933?style=flat-square" alt="node version" />
   <a href="https://github.com/synthesiseng/prism/actions">
     <img src="https://img.shields.io/github/actions/workflow/status/synthesiseng/prism/ci.yml?branch=main&style=flat-square" alt="CI status" />
   </a>
@@ -31,8 +31,14 @@ Prism owns the lifecycle for DOM-authored canvas surfaces.
 ## Installation
 
 ```sh
-npm i @synthesisengineering/prism
+pnpm add @synthesisengineering/prism
 ```
+
+## Links
+
+- [Docs](https://runprism.dev)
+- [Examples](https://runprism.dev/docs/examples/prism-atlantic)
+- [npm](https://www.npmjs.com/package/@synthesisengineering/prism)
 
 ## Quickstart
 

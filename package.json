@@ -4,6 +4,9 @@
   "description": "Native-first HTML-in-Canvas runtime for managing HTML/CSS as canvas surfaces.",
   "license": "MIT",
   "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
   "main": "./packages/html-canvas/dist/index.js",
   "types": "./packages/html-canvas/dist/index.d.ts",
   "exports": {
