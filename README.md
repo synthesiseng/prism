@@ -20,12 +20,16 @@
   </a>
 </p>
 
+<p align="center">
+  <a href="https://runprism.dev">Docs</a>
+</p>
+
 HTML-in-Canvas is coming to browsers. Past the cool demo, it gets messy.
 Prism handles the lifecycle so you don't have to.
 
 **Prism is a runtime for managed HTML surfaces inside canvas applications.**
 
-Author visual surfaces with HTML/CSS/SVG. Compose them inside Canvas 2D workflows. Ship data visualizations, design tools, generative art, and interactive editors.
+Author visual surfaces with HTML/CSS/SVG. Compose them inside Canvas 2D workflows. Ship data visualizations, design tools, generative art, interactive editors and more.
 
 > **Note:** Native mode requires Chrome Canary with `chrome://flags/#canvas-draw-element` enabled. Prism falls back to a compatibility backend in unsupported browsers.
 
