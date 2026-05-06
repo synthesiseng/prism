@@ -20,17 +20,26 @@
   </a>
 </p>
 
-Native-first HTML-in-Canvas runtime for managed DOM surfaces in canvas applications. Prism does not replace your renderer. It gives canvas applications managed DOM-authored surfaces.
+HTML-in-Canvas is coming to browsers. Past the cool demo, it gets messy.
+Prism handles the lifecycle so you don't have to.
 
-## What Prism is
+**Prism is a runtime for managed HTML surfaces inside canvas applications.**
 
-Prism is not a canvas engine, UI kit, design tool, app framework, game engine, or charting library.
+Author visual surfaces with HTML/CSS/SVG. Compose them inside Canvas 2D workflows. Ship data visualizations, design tools, generative art, and interactive editors.
 
-Author visual surfaces with HTML/CSS/SVG, compose them inside Canvas 2D workflows, and let Prism manage surface registration, bounds, paint lifecycle, invalidation, readiness, coordinate helpers, and cleanup.
+> **Note:** Native mode requires Chrome Canary with `chrome://flags/#canvas-draw-element` enabled. Prism falls back to a compatibility backend in unsupported browsers.
 
-Your app still owns the scene, drawing model, animation loop, app state, chart logic, game logic, templates, transforms, and interaction rules.
+---
 
-Prism owns the lifecycle for DOM-authored canvas surfaces.
+## How It Works
+
+Your app owns the scene, drawing model, animation loop, and state. Prism owns the lifecycle for DOM-authored canvas surfaces — registration, bounds, paint, invalidation, readiness, coordinate helpers, and cleanup.
+
+## Built With Prism
+
+- [Atlantic](https://atlantic.runprism.dev) — North Atlantic tropical cyclone tracker, 2000–2025
+- [Composer](https://composer.runprism.dev/) — OG image generator
+- [Atelier](https://atelier.runprism.dev/) — Generative type art
 
 ## Installation
 
@@ -38,19 +47,18 @@ Prism owns the lifecycle for DOM-authored canvas surfaces.
 pnpm add @synthesisengineering/prism
 ```
 
-## Links
-
-- [Docs](https://runprism.dev)
-- [Examples](https://runprism.dev/docs/examples/prism-atlantic)
-- [npm](https://www.npmjs.com/package/@synthesisengineering/prism)
-
 ## Quickstart
 
 ```ts
 import { CanvasRuntime } from "@synthesisengineering/prism";
 
 const runtime = new CanvasRuntime(canvas, { backend: "auto" });
+runtime.start();
+```
 
+Register surfaces when you need them:
+
+```ts
 const surface = runtime.registerSurface(element, {
   bounds: { x: 0, y: 0, width: 1200, height: 630 }
 });
@@ -58,13 +66,11 @@ const surface = runtime.registerSurface(element, {
 runtime.onPaint(({ drawSurface }) => {
   drawSurface(surface);
 });
-
-runtime.start();
 ```
 
 ## Export Readiness
 
-Use `paintOnce()` when code needs to wait for Prism to complete one runtime-owned paint pass. It works without starting the runtime loop.
+Use `paintOnce()` to wait for one complete paint pass before exporting:
 
 ```ts
 await document.fonts.ready;
@@ -75,11 +81,15 @@ const blob = await new Promise<Blob | null>((resolve) => {
 });
 ```
 
-Export still uses normal canvas APIs after readiness. If a surface depends on images, make sure they are loaded or decoded before calling `paintOnce()`.
-
 ## Backend Modes
 
-Prism prefers native HTML-in-Canvas when available and falls back to a lower-fidelity compatibility backend when it is not.
+Prism prefers native HTML-in-Canvas and falls back automatically:
+
+```ts
+new CanvasRuntime(canvas, { backend: "auto" }); // default
+new CanvasRuntime(canvas, { backend: "native" }); // native only
+new CanvasRuntime(canvas, { backend: "fallback" }); // compatibility only
+```
 
 ```ts
 if (runtime.backendKind !== "native") {
@@ -87,19 +97,13 @@ if (runtime.backendKind !== "native") {
 }
 ```
 
-The fallback backend is compatibility-only. It does not define the public API and is not equivalent to native HTML rendering.
+The fallback backend is lower fidelity. Native is the target.
 
 ## Coordinate Spaces
 
-Surface bounds and input coordinates use CSS pixels.
-
-Direct drawing inside `onPaint()` uses the canvas backing-store pixel space.
+Surface bounds and input coordinates use CSS pixels. Direct drawing inside `onPaint()` uses canvas backing-store pixels.
 
 Use runtime helpers when aligning manual canvas drawing with surface coordinates:
-
-- `clientToCanvasPoint()`
-- `cssLengthToCanvasPixels()`
-- `cssPointToCanvasPixels()`
 
 ```ts
 runtime.onPaint(({ ctx, drawSurface }) => {
@@ -110,41 +114,29 @@ runtime.onPaint(({ ctx, drawSurface }) => {
 });
 ```
 
+Helpers: `clientToCanvasPoint()` · `cssLengthToCanvasPixels()` · `cssPointToCanvasPixels()`
+
 ## Surface Lifecycle
 
-Register surfaces through the runtime:
-
 ```ts
+// Register
 const surface = runtime.registerSurface(element, {
   bounds: { x: 0, y: 0, width: 320, height: 180 }
 });
-```
 
-Update surface bounds in CSS pixels:
-
-```ts
+// Update bounds
 surface.setBounds({ x: 24, y: 32, width: 360, height: 220 });
-```
 
-When a surface leaves the runtime:
-
-```ts
+// Remove
 runtime.unregisterSurface(surface);
 // or
 surface.dispose();
-```
 
-Destroy the runtime when finished:
-
-```ts
+// Destroy runtime
 runtime.destroy();
 ```
 
-Undrawn surfaces are inactive for pointer and focus handling until they are drawn again.
-
 ## API
-
-The supported package entry point is:
 
 ```ts
 import { CanvasRuntime } from "@synthesisengineering/prism";
@@ -161,80 +153,40 @@ import type {
 } from "@synthesisengineering/prism";
 ```
 
-`CanvasRuntime` is the only constructible public runtime class. `CanvasSurface`
-is returned by `registerSurface()` and may be imported as a type, but
-applications should not construct surfaces directly.
-
-Everything outside the package root is internal. Runtime internals, backend
-classes, and raw HTML-in-Canvas platform wrappers are not public API.
-
-### Settings
+### CanvasRuntime
 
 ```ts
 new CanvasRuntime(canvas, options);
 ```
 
-Creates a Prism runtime for one canvas.
+**Options:** `backend: "auto" | "native" | "fallback"`
 
-Options:
+**Properties:** `canvas` · `width` · `height` · `pixelRatio` · `backendKind`
 
-- `backend`: `"auto" | "native" | "fallback"`
-
-### Properties
-
-- `canvas`
-- `width`
-- `height`
-- `pixelRatio`
-- `backendKind`
-
-### Methods
-
-- `registerSurface(element, options)`
-- `unregisterSurface(surface)`
-- `onUpdate(handler)`
-- `onPaint(handler)`
-- `invalidate()`
-- `paintOnce()`
-- `start()`
-- `stop()`
-- `destroy()`
-- `clientToCanvasPoint(x, y)`
-- `cssLengthToCanvasPixels(length)`
-- `cssPointToCanvasPixels(point)`
+**Methods:** `registerSurface()` · `unregisterSurface()` · `onUpdate()` · `onPaint()` · `invalidate()` · `paintOnce()` · `start()` · `stop()` · `destroy()` · `clientToCanvasPoint()` · `cssLengthToCanvasPixels()` · `cssPointToCanvasPixels()`
 
 ### CanvasSurface
 
-- `element`
-- `isDisposed`
-- `getBounds()`
-- `setBounds(bounds)`
-- `dispose()`
+Returned by `registerSurface()`. Do not construct directly.
+
+**Properties:** `element` · `isDisposed`
+
+**Methods:** `getBounds()` · `setBounds()` · `dispose()`
 
 ## Considerations
 
-- Native HTML-in-Canvas is currently experimental.
-- Fallback is compatibility-only and lower fidelity.
-- `paintOnce()` waits for one runtime-owned paint pass; it does not export image data itself.
+- Native HTML-in-Canvas is experimental.
+- `paintOnce()` waits for one paint pass. It does not export image data itself.
 - Surface bounds and input coordinates are CSS pixels.
 - Direct `ctx` drawing uses canvas backing-store pixels.
-- Undrawn surfaces are inactive for pointer and focus handling until they are drawn again.
+- Undrawn surfaces are inactive for pointer and focus handling.
 
 ## Limitations
 
 - Native mode depends on browser support for HTML-in-Canvas.
-- Fallback is not equivalent to native HTML rendering.
+- The fallback backend is lower fidelity than native HTML rendering.
 - Prism v1 is 2D-first.
-- WebGL/WebGPU and renderer integrations are future-facing, not the current public API center.
-
-## Native Support
-
-Native HTML-in-Canvas currently requires a Chromium build with the
-`canvas-draw-element` flag enabled. Chrome Canary is the primary target.
-
-```txt
-chrome://flags/#canvas-draw-element
-```
+- WebGL/WebGPU integrations are future-facing.
 
 ## Development
 
@@ -249,9 +201,7 @@ pnpm build
 
 ## Platform Credit
 
-Prism is built around the [HTML-in-Canvas proposal](https://github.com/WICG/html-in-canvas)
-and related standards work in the WICG. All credit for the underlying platform
-capability goes to the proposal authors and the WICG.
+Prism is built around the [HTML-in-Canvas proposal](https://github.com/WICG/html-in-canvas) and related WICG standards work. All credit for the underlying platform capability goes to the proposal authors and the WICG.
 
 ## License
 
