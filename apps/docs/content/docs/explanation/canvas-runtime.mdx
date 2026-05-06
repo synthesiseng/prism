@@ -26,5 +26,22 @@ It does not own app state, chart data, template data, React state, game state, o
 - `destroy()`
 - coordinate conversion helpers
 
-Use the package root import. Backend classes, platform wrappers, paint-pass helpers, and runtime internals are not public API.
+## Callback semantics
 
+`onPaint()` and `onUpdate()` are additive. Calling either method registers another handler; it does not replace existing handlers.
+
+```ts
+runtime.onPaint(firstHandler);
+runtime.onPaint(secondHandler);
+// both handlers run during a paint pass
+```
+
+Prism does not expose a general event system or unsubscribe API today. Register stable handlers and keep app state outside Prism.
+
+## Destroyed runtime behavior
+
+`destroy()` stops the runtime, unregisters registered surfaces, clears handlers, and rejects pending paint waiters. After `destroy()`, new runtime work such as `start()`, `onPaint()`, `onUpdate()`, `registerSurface()`, and `paintOnce()` throws or rejects.
+
+`stop()` and `destroy()` are idempotent. Calling either after the runtime has already been destroyed is safe.
+
+Use the package root import. Backend classes, platform wrappers, paint-pass helpers, and runtime internals are not public API.

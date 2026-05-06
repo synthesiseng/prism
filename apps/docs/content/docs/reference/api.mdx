@@ -29,6 +29,15 @@ Everything outside the package root is not public API. Runtime internals, backen
 `CanvasSurface` is a public TypeScript type. Surface instances are returned by
 `registerSurface()` and should not be constructed by apps.
 
+## Runtime semantics
+
+- `onPaint()` and `onUpdate()` are additive. They register another handler and do not replace existing handlers.
+- `invalidate()` schedules another Prism-owned paint pass; it does not store app state.
+- Registering the same element with the same runtime returns the existing `CanvasSurface`; new options are not reapplied.
+- `paintOnce()` works without `start()`. Pending `paintOnce()` waiters reject if a paint handler throws or the runtime is destroyed.
+- `destroy()` disposes registered surfaces. Disposed surfaces report `isDisposed === true`; `getBounds()` and `setBounds()` throw.
+- Prism does not expose a general event system or unsubscribe API today.
+
 ## Related
 
 - [CanvasRuntime](/docs/explanation/canvas-runtime)
