@@ -179,6 +179,8 @@ Returned by `registerSurface()`. Do not construct directly.
 
 ## Considerations
 
+## Considerations
+
 - Native HTML-in-Canvas is experimental.
 - Fallback mode is compatibility-only, lower fidelity, and not equivalent to native HTML rendering.
 - `onPaint()` and `onUpdate()` are additive. Each call registers another handler; it does not replace previous handlers.
