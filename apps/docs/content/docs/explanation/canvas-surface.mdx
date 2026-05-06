@@ -26,5 +26,6 @@ surface.setBounds({ x: 48, y: 64, width: 420, height: 240 });
 surface.dispose();
 ```
 
-Disposing a surface unregisters it from the runtime and restores Prism-owned DOM state.
+Disposing a surface unregisters it from the runtime and restores Prism-owned DOM state. Calling `dispose()` more than once is safe.
 
+`runtime.destroy()` disposes every registered surface. After disposal, `isDisposed` is `true`; `getBounds()` and `setBounds()` throw.

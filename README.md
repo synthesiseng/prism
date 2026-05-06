@@ -179,11 +179,17 @@ Returned by `registerSurface()`. Do not construct directly.
 
 ## Considerations
 
+## Considerations
+
 - Native HTML-in-Canvas is experimental.
-- `paintOnce()` waits for one paint pass. It does not export image data itself.
-- Surface bounds and input coordinates are CSS pixels.
+- Fallback mode is compatibility-only, lower fidelity, and not equivalent to native HTML rendering.
+- `onPaint()` and `onUpdate()` are additive. Each call registers another handler; it does not replace previous handlers.
+- `invalidate()` schedules another Prism-owned paint pass when app-owned state changes outside Prism APIs.
+- `paintOnce()` works without `start()`. It waits for one runtime-owned paint pass and does not export image data itself.
+- Destroying a runtime disposes its registered surfaces. Disposed surfaces report `isDisposed === true` and reject bounds reads and updates.
+- Surface bounds and input coordinates use CSS pixels.
 - Direct `ctx` drawing uses canvas backing-store pixels.
-- Undrawn surfaces are inactive for pointer and focus handling.
+- Undrawn surfaces are inactive for pointer and focus handling until they are drawn again.
 
 ## Limitations
 

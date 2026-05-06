@@ -18,3 +18,8 @@ Use it when you need a deterministic readiness point before calling normal canva
 
 `paintOnce()` works without starting the runtime loop.
 
+Multiple pending `paintOnce()` calls resolve from the same completed paint pass.
+
+If `paintOnce()` is called during `onPaint()`, it waits for the next paint pass. It does not resolve from the pass already in progress.
+
+Pending `paintOnce()` waiters reject if a paint handler throws or the runtime is destroyed.
