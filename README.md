@@ -53,19 +53,21 @@ pnpm add @synthesisengineering/prism
 
 ## Agent Skill
 
-Prism includes an agent skill for Codex/Claude/Cursor-style coding agents.
+Using an AI coding agent? Install the Prism runtime skill:
 
-The skill teaches agents how to use Prism's runtime contract correctly: register DOM surfaces, draw them in the paint pass, wait for `paintOnce()` before export, use CSS-pixel bounds, clean up surfaces, and avoid raw HTML-in-Canvas platform calls.
+```sh
+npx skills add synthesiseng/prism --skill prism-runtime
+```
 
-See [`skills/prism-runtime/SKILL.md`](skills/prism-runtime/SKILL.md).
+The skill teaches agents the Prism runtime contract:
 
-The skill is especially useful for preventing common mistakes:
+- import from the package root: `@synthesisengineering/prism`
+- register HTML/CSS/SVG DOM nodes as surfaces
+- draw surfaces inside `onPaint()`
+- wait for `document.fonts.ready` and `runtime.paintOnce()` before export
+- avoid `html2canvas`, `dom-to-image`, raw `drawElementImage()`, and deep imports
 
-- using `html2canvas` or `dom-to-image`
-- calling `drawElementImage()` directly
-- deep importing Prism internals
-- exporting before `runtime.paintOnce()`
-- confusing CSS pixels with backing-store pixels
+Source: [`skills/prism-runtime/SKILL.md`](skills/prism-runtime/SKILL.md).
 
 ## Quickstart
 
