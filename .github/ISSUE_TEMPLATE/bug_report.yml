@@ -1,0 +1,158 @@
+name: Bug Report
+description: Report a Prism bug to help us improve
+title: "[Bug]: "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a Prism bug.
+
+        Before filing, please search existing issues and test against the latest published alpha of `@synthesisengineering/prism`.
+
+        Native fidelity requires a Chromium or Chrome Canary build with `chrome://flags/#canvas-draw-element` enabled. Fallback mode is compatibility-only and lower fidelity.
+
+        Please include a minimal reproduction. Issues without a reproduction may be closed if we cannot reproduce the behavior.
+
+  - type: textarea
+    id: bug-description
+    attributes:
+      label: Describe the bug
+      description: What happened, and what Prism behavior appears incorrect?
+    validations:
+      required: true
+
+  - type: input
+    id: reproduction
+    attributes:
+      label: Link to minimal reproduction
+      description: Public GitHub repo, StackBlitz, CodeSandbox, or minimal Vite project. Issues without a reproduction may be closed if we cannot reproduce them.
+      placeholder: https://github.com/your-name/prism-repro
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduce-steps
+    attributes:
+      label: Steps to reproduce
+      description: Tell us exactly how to run and observe the bug.
+      placeholder: |
+        1. Clone the reproduction.
+        2. Run `pnpm install`.
+        3. Run `pnpm dev`.
+        4. Open the app in Chromium or Chrome Canary.
+        5. If testing native mode, enable `chrome://flags/#canvas-draw-element`.
+        6. Observe ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected behavior
+      description: What did you expect Prism to do?
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual behavior
+      description: What happened instead? Include console errors, screenshots, or recordings if useful.
+    validations:
+      required: true
+
+  - type: dropdown
+    id: backend
+    attributes:
+      label: Prism backend
+      description: Which backend was active when the bug occurred?
+      options:
+        - native
+        - fallback
+        - auto selected native
+        - auto selected fallback
+        - not sure
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Include the relevant runtime, browser, and reproduction details.
+      render: shell
+      placeholder: |
+        Prism version:
+        Package manager/version:
+        Node version:
+        Browser/version:
+        Native flag enabled: yes/no
+        runtime.backendKind:
+        OS/version/arch:
+        Reproduction command:
+    validations:
+      required: true
+
+  - type: textarea
+    id: prism-code
+    attributes:
+      label: Relevant Prism code
+      description: Paste the smallest Prism setup that demonstrates the issue.
+      render: ts
+      placeholder: |
+        import { CanvasRuntime } from "@synthesisengineering/prism";
+
+        const runtime = new CanvasRuntime(canvas, { backend: "auto" });
+        const surface = runtime.registerSurface(element, {
+          bounds: { x: 0, y: 0, width: 320, height: 180 }
+        });
+
+        runtime.onPaint(({ drawSurface }) => {
+          drawSurface(surface);
+        });
+
+        runtime.start();
+
+  - type: textarea
+    id: lifecycle-details
+    attributes:
+      label: Lifecycle details
+      description: For disposal, destroy, repeated registration, React unmount, route-change, or hot-reload bugs, describe the lifecycle involved.
+      placeholder: |
+        Are surfaces disposed?
+        Is `runtime.destroy()` called?
+        Are route changes, React unmounts, or hot reload involved?
+        Is the same DOM element registered more than once?
+
+  - type: textarea
+    id: export-readiness
+    attributes:
+      label: Export / paint readiness details
+      description: For export or readiness bugs, describe the paint/export flow.
+      placeholder: |
+        Do you await `document.fonts.ready`?
+        Are images or videos loaded/decoded before export?
+        Do you await `runtime.paintOnce()` before `canvas.toBlob()`?
+        Does `paintOnce()` resolve, reject, or hang?
+        Do paint handler errors appear?
+
+  - type: checkboxes
+    id: checklist
+    attributes:
+      label: Checklist
+      options:
+        - label: I am importing Prism from `@synthesisengineering/prism`, not an internal path.
+          required: true
+        - label: I am not calling raw `layoutsubtree`, `onpaint`, `requestPaint()`, or `drawElementImage()` APIs directly in app code.
+          required: true
+        - label: I am not using `html2canvas`, `dom-to-image`, iframe screenshotting, or `foreignObject` export in the reproduction.
+          required: true
+        - label: I included a minimal reproduction link.
+          required: true
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional context
+      description: Add anything else that may help us understand the issue.
