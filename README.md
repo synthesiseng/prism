@@ -51,6 +51,22 @@ Your app owns the scene, drawing model, animation loop, and state. Prism owns th
 pnpm add @synthesisengineering/prism
 ```
 
+## Agent Skill
+
+Prism includes an agent skill for Codex/Claude/Cursor-style coding agents.
+
+The skill teaches agents how to use Prism's runtime contract correctly: register DOM surfaces, draw them in the paint pass, wait for `paintOnce()` before export, use CSS-pixel bounds, clean up surfaces, and avoid raw HTML-in-Canvas platform calls.
+
+See [`skills/prism-runtime/SKILL.md`](skills/prism-runtime/SKILL.md).
+
+The skill is especially useful for preventing common mistakes:
+
+- using `html2canvas` or `dom-to-image`
+- calling `drawElementImage()` directly
+- deep importing Prism internals
+- exporting before `runtime.paintOnce()`
+- confusing CSS pixels with backing-store pixels
+
 ## Quickstart
 
 ```ts
