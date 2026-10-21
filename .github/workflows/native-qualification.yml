@@ -13,11 +13,12 @@ permissions:
 
 jobs:
   native:
-    runs-on: ubuntu-24.04
+    runs-on: macos-26
     timeout-minutes: 10
     env:
       CI: "1"
       CFT_VERSION: "158.0.8115.0"
+      CFT_SHA256: "4bab3b7587693298e6058cef8184bff990d51037acbab82668ef7e30ac6c3bc5"
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
     defaults:
       run:
@@ -38,17 +39,17 @@ jobs:
           EVIDENCE="$RUNNER_TEMP/native-qualification"
           printf 'EVIDENCE=%s\n' "$EVIDENCE" >> "$GITHUB_ENV"
           mkdir -p "$EVIDENCE"
-          test "$RUNNER_OS/$RUNNER_ARCH" = "Linux/X64"
+          test "$RUNNER_OS/$RUNNER_ARCH" = "macOS/ARM64"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
           {
             printf 'source=%s\nrun=%s\nattempt=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
             printf 'runner=%s/%s\nimage=%s\nimage_version=%s\n' "$RUNNER_OS" "$RUNNER_ARCH" "$ImageOS" "$ImageVersion"
-            uname -srmo
-            cat /etc/os-release
+            uname -srm
+            sw_vers
             node --version
             pnpm --version
-            sha256sum pnpm-lock.yaml scripts/native-compatibility-spike.mjs scripts/assert-native-result.mjs
-            sha256sum tests/e2e/spike/index.html playwright.native.config.ts .github/workflows/native-qualification.yml
+            shasum -a 256 pnpm-lock.yaml scripts/native-compatibility-spike.mjs scripts/assert-native-result.mjs
+            shasum -a 256 tests/e2e/spike/index.html playwright.native.config.ts .github/workflows/native-qualification.yml
           } > "$EVIDENCE/environment.txt"
       - run: pnpm install --frozen-lockfile
       - name: Download exact official test browser
@@ -56,7 +57,7 @@ jobs:
         run: |
           browser_dir="$RUNNER_TEMP/chrome-for-testing-$CFT_VERSION"
           mkdir -p "$browser_dir"
-          url="https://storage.googleapis.com/chrome-for-testing-public/$CFT_VERSION/linux64/chrome-linux64.zip"
+          url="https://storage.googleapis.com/chrome-for-testing-public/$CFT_VERSION/mac-arm64/chrome-mac-arm64.zip"
           curl --fail --show-error --silent --location --proto '=https' --proto-redir '=https' --max-time 120 \
             "https://googlechromelabs.github.io/chrome-for-testing/$CFT_VERSION.json" -o "$EVIDENCE/browser-metadata.json"
           node --input-type=module - "$EVIDENCE/browser-metadata.json" "$CFT_VERSION" "$url" <<'NODE'
@@ -65,38 +66,21 @@ jobs:
           const [file, version, url] = process.argv.slice(2);
           const metadata = JSON.parse(readFileSync(file, 'utf8'));
           assert.equal(metadata.version, version);
-          assert.equal(metadata.downloads.chrome.find(item => item.platform === 'linux64')?.url, url);
+          assert.equal(metadata.downloads.chrome.find(item => item.platform === 'mac-arm64')?.url, url);
           NODE
           printf '%s\n' "$url" > "$EVIDENCE/browser-url.txt"
           curl --fail --show-error --silent --location --proto '=https' --proto-redir '=https' --max-time 120 \
             "$url" -o "$browser_dir/chrome.zip"
-          sha256sum "$browser_dir/chrome.zip" > "$EVIDENCE/browser-sha256.txt"
+          shasum -a 256 "$browser_dir/chrome.zip" > "$EVIDENCE/browser-sha256.txt"
+          printf '%s  %s\n' "$CFT_SHA256" "$browser_dir/chrome.zip" | shasum -a 256 -c -
           unzip -q "$browser_dir/chrome.zip" -d "$browser_dir"
-          browser="$browser_dir/chrome-linux64/chrome"
+          browser="$browser_dir/chrome-mac-arm64/Google Chrome for Testing.app/Contents/MacOS/Google Chrome for Testing"
           "$browser" --version | tee "$EVIDENCE/browser-version.txt"
           test "$("$browser" --version)" = "Google Chrome for Testing $CFT_VERSION " || \
             test "$("$browser" --version)" = "Google Chrome for Testing $CFT_VERSION"
-          sha256sum "$browser" >> "$EVIDENCE/browser-sha256.txt"
+          shasum -a 256 "$browser" >> "$EVIDENCE/browser-sha256.txt"
           pnpm exec playwright --version >> "$EVIDENCE/environment.txt"
           printf 'PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=%s\n' "$browser" >> "$GITHUB_ENV"
-      - name: Validate existing Chrome sandbox helper
-        run: |
-          helper=/opt/google/chrome/chrome-sandbox
-          {
-            id -u
-            for control in /proc/sys/kernel/apparmor_restrict_unprivileged_userns /proc/sys/user/max_user_namespaces; do
-              if test -r "$control"; then printf '%s=' "$control"; cat "$control"; fi
-            done
-            stat -c 'helper_path_owner=%u helper_path_mode=%a type=%F path=%N' "$helper"
-          } > "$EVIDENCE/sandbox-preflight.txt"
-          helper="$(readlink -e -- "$helper")"
-          stat -c 'helper_target_owner=%u helper_target_mode=%a type=%F path=%n' "$helper" >> "$EVIDENCE/sandbox-preflight.txt"
-          test -f "$helper"
-          test -x "$helper"
-          test -u "$helper"
-          test "$(stat -c '%u:%a' "$helper")" = '0:4755'
-          sha256sum "$helper" >> "$EVIDENCE/sandbox-preflight.txt"
-          printf 'CHROME_DEVEL_SANDBOX=%s\n' "$helper" >> "$GITHUB_ENV"
       - name: Collect and require native pixels and clicks
         run: |
           node scripts/native-compatibility-spike.mjs "$PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH" "$EVIDENCE/native.json" 2>&1 | tee "$EVIDENCE/collector.log"
