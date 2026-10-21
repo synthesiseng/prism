@@ -87,8 +87,10 @@ jobs:
             for control in /proc/sys/kernel/apparmor_restrict_unprivileged_userns /proc/sys/user/max_user_namespaces; do
               if test -r "$control"; then printf '%s=' "$control"; cat "$control"; fi
             done
-            stat -c 'helper_owner=%u helper_mode=%a path=%n' "$helper"
+            stat -c 'helper_path_owner=%u helper_path_mode=%a type=%F path=%N' "$helper"
           } > "$EVIDENCE/sandbox-preflight.txt"
+          helper="$(readlink -e -- "$helper")"
+          stat -c 'helper_target_owner=%u helper_target_mode=%a type=%F path=%n' "$helper" >> "$EVIDENCE/sandbox-preflight.txt"
           test -f "$helper"
           test -x "$helper"
           test -u "$helper"
