@@ -16,6 +16,7 @@ export default defineConfig({
     baseURL: "http://127.0.0.1:4178",
     trace: "on-first-retry",
     launchOptions: {
+      chromiumSandbox: true,
       ...(executablePath ? { executablePath } : {}),
       args: ["--enable-features=CanvasDrawElement"]
     }

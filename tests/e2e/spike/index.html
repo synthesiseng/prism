@@ -1,0 +1,205 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Native canvas compatibility probe</title>
+<style>html,body{margin:0;padding:0}canvas{display:block;transform-origin:0 0}button{appearance:none;border:0;padding:0;border-radius:0}</style>
+<script type="module">
+import { CanvasRuntime } from '@synthesisengineering/prism';
+
+const errors = [];
+window.addEventListener('error', event => errors.push(String(event.error ?? event.message)));
+window.addEventListener('unhandledrejection', event => errors.push(String(event.reason)));
+let active;
+const errorInfo = error => ({ name: error?.name, message: String(error?.message ?? error) });
+const bounded = promise => {
+  let timer;
+  return Promise.race([
+    promise,
+    new Promise(resolve => { timer = setTimeout(() => resolve({ status: 'harness-timeout' }), 1500); }),
+  ]).finally(() => clearTimeout(timer));
+};
+
+async function setup(options) {
+  active?.cleanup();
+  errors.length = 0;
+  const { mode, scale = 1, appTransform = false, variant = 'normal', assetUrl, assetCors = false, assetBackground = false } = options;
+  const root = document.createElement('div');
+  const canvas = document.createElement('canvas');
+  canvas.style.cssText = `width:500px;height:300px;transform:scale(${scale});transform-origin:0 0`;
+  canvas.width = 500 * devicePixelRatio;
+  canvas.height = 300 * devicePixelRatio;
+  const el = document.createElement('section');
+  el.style.cssText = 'position:absolute;left:0;top:0;width:120px;height:80px;background:rgb(255,0,0);';
+  if (appTransform) el.style.transform = 'translate(13px, 7px) rotate(8deg)';
+  const initialStyle = el.getAttribute('style');
+  const initialTransform = el.style.transform;
+  const button = document.createElement('button');
+  button.style.cssText = 'position:absolute;left:20px;top:20px;width:40px;height:30px;background:rgb(0,0,255);';
+  button.textContent = '';
+  let clicks = 0;
+  button.addEventListener('click', () => { clicks++; });
+  el.append(button);
+  root.append(canvas, el);
+  document.body.append(root);
+  if (assetUrl) {
+    const img = new Image();
+    if (assetCors) img.crossOrigin = 'anonymous';
+    img.src = assetUrl;
+    await img.decode();
+    if (assetBackground) {
+      el.style.backgroundImage = `url("${assetUrl}")`;
+    } else {
+      img.style.cssText = 'position:absolute;left:0;top:0;width:16px;height:16px';
+      el.append(img);
+    }
+  }
+  const ctx = canvas.getContext('2d');
+  let bounds = { x: 40, y: 40, width: 120, height: 80 };
+  let drawn = true;
+  let runtime, surface, pending;
+  let paintEvents = 0;
+  const observations = [];
+  const started = performance.now();
+  const draw = () => {
+    paintEvents++;
+    ctx.reset();
+    const before = performance.now();
+    try {
+      let returned;
+      if (drawn) {
+        returned = ctx.drawElementImage(el, bounds.x * devicePixelRatio, bounds.y * devicePixelRatio, bounds.width * devicePixelRatio, bounds.height * devicePixelRatio);
+      }
+      const result = { status: 'painted', returned: typeof returned, paintMs: performance.now() - before };
+      observations.push(result);
+      pending?.(result);
+    } catch (error) {
+      const result = { status: 'draw-error', error: errorInfo(error) };
+      observations.push(result);
+      pending?.(result);
+    }
+    pending = undefined;
+  };
+  if (mode === 'raw') {
+    if (variant !== 'no-content') canvas.setAttribute('content', 'drawable');
+    if (variant !== 'no-drawable') el.setAttribute('drawable', '');
+    if (variant === 'nested-element') {
+      const wrapper = document.createElement('div');
+      canvas.append(wrapper); wrapper.append(el);
+    } else if (variant === 'nested-canvas') {
+      const inner = document.createElement('canvas');
+      inner.setAttribute('content', 'drawable');
+      canvas.append(inner); inner.append(el);
+    } else canvas.append(el);
+    canvas.addEventListener('paint', draw);
+  } else {
+    runtime = new CanvasRuntime(canvas, { backend: 'native' });
+    surface = runtime.registerSurface(el, { bounds });
+    runtime.onPaint(({ drawSurface }) => { paintEvents++; if (drawn) drawSurface(surface); });
+  }
+  const paint = async () => {
+    const promise = mode === 'raw'
+      ? new Promise(resolve => { pending = resolve; canvas.requestPaint(); })
+      : runtime.paintOnce().then(() => ({ status: 'painted' }), error => ({ status: 'draw-error', error: errorInfo(error) }));
+    return bounded(promise);
+  };
+  // Map independently known CSS dimensions to the actual bitmap. Browser
+  // devicePixelContentBoxSize can differ from emulated devicePixelRatio.
+  const sample = (x, y, requestedDpr = false) => Array.from(ctx.getImageData(
+    Math.round(x * (requestedDpr ? devicePixelRatio : canvas.width / 500)),
+    Math.round(y * (requestedDpr ? devicePixelRatio : canvas.height / 300)), 1, 1).data);
+  // Independent oracle for this fixture's known transform: origin (60,40),
+  // translate (13,7), then rotation 8 degrees. No Prism/browser geometry helper.
+  const sourcePoint = (x, y) => {
+    if (!appTransform) return { x: bounds.x + x, y: bounds.y + y };
+    const radians = 8 * Math.PI / 180;
+    return { x: bounds.x + 60 + 13 + (x - 60) * Math.cos(radians) - (y - 40) * Math.sin(radians),
+      y: bounds.y + 40 + 7 + (x - 60) * Math.sin(radians) + (y - 40) * Math.cos(radians) };
+  };
+  const colorAtSource = (x, y) => { const point = sourcePoint(x, y); return sample(point.x, point.y); };
+  const cleanup = () => {
+    runtime?.destroy();
+    canvas.removeEventListener('paint', draw);
+    root.remove();
+  };
+  active = { canvas, el, button, runtime, surface, root, paint, cleanup,
+    get clicks() { return clicks; }, get bounds() { return bounds; },
+    relocate() { bounds = { ...bounds, x: 220, y: 130 }; surface?.setBounds(bounds); },
+    deactivate() { drawn = false; if (mode === 'raw') { el.style.pointerEvents = 'none'; el.inert = true; } },
+    details() { const expected = sourcePoint(40, 35); return { expectedButtonPoint: { x: expected.x * scale, y: expected.y * scale }, untransformedSamples: { red: sample(bounds.x + 10, bounds.y + 10), blue: sample(bounds.x + 30, bounds.y + 30) }, requestedDprSamples: { red: sample(bounds.x + 10, bounds.y + 10, true), blue: sample(bounds.x + 30, bounds.y + 30, true) }, canvasWidth: canvas.width, canvasHeight: canvas.height, devicePixelRatio, cssWidth: canvas.clientWidth, cssHeight: canvas.clientHeight, paintEvents, clicks, transform: el.style.transform, initialTransform, errors: [...errors], observations: [...observations] }; },
+    sample() { return { red: colorAtSource(10, 10), blue: colorAtSource(30, 30) }; },
+    dispose() {
+      runtime?.destroy();
+      const result = { transformPreserved: el.style.transform === initialTransform,
+        styleRestored: el.getAttribute('style') === initialStyle,
+        parentRestored: el.parentElement === root, isDisposed: surface?.isDisposed };
+      cleanup(); return result;
+    },
+  };
+  if (variant === 'before-snapshot') {
+    try { ctx.drawElementImage(el, 40, 40); return { status: 'unexpected-immediate-draw-success' }; }
+    catch (error) { return { status: 'immediate-draw-error', error: errorInfo(error) }; }
+  }
+  const result = await paint();
+  return { ...result, readyMs: performance.now() - started, details: active.details(), pixels: result.status === 'painted' ? active.sample() : null };
+}
+
+function ownership() {
+  active?.cleanup();
+  const root = document.createElement('div');
+  const a = document.createElement('canvas'), b = document.createElement('canvas'), el = document.createElement('section');
+  a.style.cssText = b.style.cssText = 'width:200px;height:100px';
+  root.append(a, b, el); document.body.append(root);
+  const first = new CanvasRuntime(a, { backend: 'native' });
+  const second = new CanvasRuntime(b, { backend: 'native' });
+  let third, secondSurface;
+  const options = { bounds: { x: 0, y: 0, width: 40, height: 30 } };
+  const initial = first.registerSurface(el, options);
+  let elementAccepted = false, canvasAccepted = false;
+  try { secondSurface = second.registerSurface(el, options); elementAccepted = true; } catch { /* Refusal is recorded by the corresponding false acceptance flag. */ }
+  const afterSecondInB = el.parentElement === b;
+  initial.dispose();
+  const firstDisposeStoleFromB = elementAccepted && el.parentElement !== b;
+  try { third = new CanvasRuntime(a, { backend: 'native' }); canvasAccepted = true; } catch { /* Refusal is recorded by the corresponding false acceptance flag. */ }
+  const result = { duplicateElementAccepted: elementAccepted, afterSecondInB, firstDisposeStoleFromB,
+    secondSurfaceStillLive: secondSurface ? !secondSurface.isDisposed : null, duplicateCanvasAccepted: canvasAccepted };
+  third?.destroy(); first.destroy(); second.destroy(); root.remove();
+  return result;
+}
+
+window.nativeSpike = {
+  setup, ownership,
+  async relocate() { active.relocate(); const result = await active.paint(); return { ...result, pixels: result.status === 'painted' ? active.sample() : null, details: active.details() }; },
+  async deactivate() { active.deactivate(); return active.paint(); },
+  details: () => active.details(),
+  renderedButtonPoint() {
+    const canvas = active.canvas;
+    const pixels = canvas.getContext('2d').getImageData(0, 0, canvas.width, canvas.height).data;
+    let count = 0, sumX = 0, sumY = 0;
+    for (let y = 0; y < canvas.height; y++) for (let x = 0; x < canvas.width; x++) {
+      const offset = (y * canvas.width + x) * 4;
+      if (pixels[offset] === 0 && pixels[offset + 1] === 0 && pixels[offset + 2] === 255 && pixels[offset + 3] === 255) {
+        count++; sumX += x + 0.5; sumY += y + 0.5;
+      }
+    }
+    if (!count) return null;
+    const rect = canvas.getBoundingClientRect();
+    return { count, x: rect.left + sumX / count * rect.width / canvas.width,
+      y: rect.top + sumY / count * rect.height / canvas.height };
+  },
+  dispose: () => active.dispose(),
+  async coalescing() {
+    if (!active.runtime) return null;
+    let requests = 0;
+    const original = active.canvas.requestPaint;
+    active.canvas.requestPaint = function () { requests++; return original.call(this); };
+    const result = await bounded(Promise.all([active.runtime.paintOnce(), active.runtime.paintOnce(), active.runtime.paintOnce()]).then(() => ({ status: 'painted' }), error => ({ status: 'draw-error', error: errorInfo(error) })));
+    active.canvas.requestPaint = original;
+    return { ...result, requests };
+  },
+  capabilities() {
+    const c = document.createElement('canvas'), ctx = c.getContext('2d');
+    return { content: 'content' in HTMLCanvasElement.prototype, requestPaint: typeof c.requestPaint,
+      drawElementImage: typeof ctx.drawElementImage, clearElementGeometry: typeof c.clearElementGeometry };
+  },
+};
+
+</script>

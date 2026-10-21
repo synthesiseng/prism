@@ -1,7 +1,7 @@
-import type { Rect } from "@prism/math";
 import type { RuntimeBackend, SurfaceDrawRequest } from "../backend";
-import { hasNativeHtmlCanvas, type HtmlCanvasContext2D, type HtmlCanvasElement } from "../experimental-types";
-import type { CanvasSurface } from "../surface";
+import { hasNativeHtmlCanvas, type HtmlCanvasContext2D } from "../experimental-types";
+import { PrismNativeError } from "../native-error";
+import { nativePlatform } from "../runtime/native-platform";
 
 export class NativeHtmlCanvasBackend implements RuntimeBackend {
   readonly kind = "native" as const;
@@ -12,27 +12,23 @@ export class NativeHtmlCanvasBackend implements RuntimeBackend {
   }
 
   requestPaint(canvas: HTMLCanvasElement): void {
-    (canvas as HtmlCanvasElement).requestPaint();
+    nativePlatform.requestPaint(canvas);
   }
 
   render(
     frame: Readonly<{ ctx: HtmlCanvasContext2D }>,
-    draws: readonly SurfaceDrawRequest[],
-    syncTransform: (surface: CanvasSurface, transform: DOMMatrix, bounds: Rect) => void
+    draws: readonly SurfaceDrawRequest[]
   ): void {
     for (const draw of draws) {
-      const transform = frame.ctx.drawElementImage(
-        draw.surface.element,
-        draw.pixelBounds.x,
-        draw.pixelBounds.y,
-        draw.pixelBounds.width,
-        draw.pixelBounds.height
-      );
-      syncTransform(
-        draw.surface,
-        transform ?? new DOMMatrix().translateSelf(draw.cssBounds.x, draw.cssBounds.y),
-        draw.cssBounds
-      );
+      try {
+        nativePlatform.draw(frame.ctx, draw.surface.element, draw.pixelBounds);
+      } catch (cause) {
+        throw new PrismNativeError(
+          "draw-failed",
+          "Native HTML-in-Canvas drawing failed.",
+          { cause }
+        );
+      }
     }
   }
 }

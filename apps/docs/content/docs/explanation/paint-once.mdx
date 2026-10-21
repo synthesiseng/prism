@@ -23,3 +23,12 @@ Multiple pending `paintOnce()` calls resolve from the same completed paint pass.
 If `paintOnce()` is called during `onPaint()`, it waits for the next paint pass. It does not resolve from the pass already in progress.
 
 Pending `paintOnce()` waiters reject if a paint handler throws or the runtime is destroyed.
+
+
+`stop()` stops animation but does not cancel pending one-shot paints. Native paints
+can reject with `PrismNativeError` code `paint-timeout` after their visible-time
+budget expires. Hidden time pauses that budget without resetting it, and paints
+completed while hidden still resolve. A late event cannot revive rejected callers.
+Timers and visibility listeners are removed when the request settles or the
+runtime is destroyed. `nativePaintTimeoutMs` defaults provisionally to 2000 ms;
+this is a diagnostic threshold, not a scheduling guarantee.

@@ -1,19 +1,17 @@
+import { PrismNativeError } from "./native-error";
+import { nativePlatform } from "./runtime/native-platform";
+import { visiblePaintDeadline } from "./runtime/visible-paint-deadline";
 import type { FrameTime } from "@prism/core";
 import { FrameLoop } from "@prism/core";
 import type { RuntimeBackend } from "./backend";
-import {
-  hasNativeHtmlCanvas,
-  type HtmlCanvasContext2D
-} from "./experimental-types";
+import { nativeCapability, type HtmlCanvasContext2D } from "./experimental-types";
 import {
   observeHiDpiCanvas,
   resizeCanvasToDisplaySize,
   type CanvasMetrics
 } from "./hidpi";
 import type { CanvasSurface, SurfaceOptions } from "./surface";
-import {
-  selectRuntimeBackend
-} from "./runtime/backend-selection";
+import { selectRuntimeBackend } from "./runtime/backend-selection";
 import {
   clientToCanvasPoint as toCanvasPoint,
   cssLengthToCanvasPixels as toCanvasPixelLength,
@@ -101,6 +99,18 @@ export type CanvasRuntimeOptions = Readonly<{
    * Chooses the rendering backend.
    */
   backend?: CanvasBackendPreference;
+  /** Visible-time diagnostic deadline in milliseconds. Default 2000 is provisional. */
+  nativePaintTimeoutMs?: number;
+}>;
+
+const canvasOwners = new WeakMap<HTMLCanvasElement, CanvasRuntime>();
+
+/** Read-only snapshot of backend capability and last native paint outcome. */
+export type CanvasDiagnostics = Readonly<{
+  backend: CanvasBackendKind;
+  capability: "supported" | "unavailable" | "unsupported-version";
+  health?: "idle" | "pending" | "healthy" | "failed";
+  lastError?: PrismNativeError;
 }>;
 
 type PaintWaiter = Readonly<{
@@ -113,7 +123,7 @@ type PaintWaiter = Readonly<{
  *
  * @remarks
  * `CanvasRuntime` is the public owner of surface registration, paint
- * scheduling, native/fallback backend selection, HiDPI sizing, DOM transform
+ * scheduling, native/fallback backend selection, HiDPI sizing, fallback transform
  * sync, invalidation, and coordinate conversion. Surface bounds and client
  * input coordinates are CSS pixels; the runtime converts to backing-store
  * pixels when drawing registered surfaces.
@@ -148,16 +158,23 @@ export class CanvasRuntime {
 
   private readonly backend: RuntimeBackend;
   private readonly ctx: HtmlCanvasContext2D;
-  private readonly loop: FrameLoop;
+  private readonly loop!: FrameLoop;
   private readonly surfaces: SurfaceRegistry;
   private readonly updateHandlers: UpdateHandler[] = [];
   private readonly paintHandlers: PaintHandler[] = [];
-  private readonly hiDpiObserver: ResizeObserver;
+  private readonly hiDpiObserver: ResizeObserver | undefined;
 
   private paintWaiters: PaintWaiter[] = [];
   private fallbackPaintScheduled = false;
   private nativePaintRequestedForWaiters = false;
-  private readonly ownsNativeLayoutSubtree: boolean;
+  private releaseNativeCanvas: (() => void) | undefined;
+  private removeNativePaintListener: (() => void) | undefined;
+  private cancelNativeDeadline: (() => void) | undefined;
+  private readonly nativePaintTimeoutMs: number;
+  private readonly capability: CanvasDiagnostics["capability"];
+  private nativeHealth: NonNullable<CanvasDiagnostics["health"]> = "idle";
+  private lastNativeError: PrismNativeError | undefined;
+  private activePaintWaiters: readonly PaintWaiter[] = [];
   private metrics: CanvasMetrics = {
     cssWidth: 0,
     cssHeight: 0,
@@ -180,6 +197,9 @@ export class CanvasRuntime {
    * @throws Error when `backend` is `"native"` and native HTML-in-Canvas is unavailable.
    */
   constructor(canvas: HTMLCanvasElement, options: CanvasRuntimeOptions = {}) {
+    if (canvasOwners.has(canvas)) {
+      throw new Error("Prism canvas is already owned by an active runtime.");
+    }
     this.canvas = canvas;
     const ctx = canvas.getContext("2d");
 
@@ -189,56 +209,92 @@ export class CanvasRuntime {
 
     this.ctx = ctx as HtmlCanvasContext2D;
     this.backend = selectRuntimeBackend(canvas, ctx, options.backend);
-    this.ownsNativeLayoutSubtree =
-      this.backend.kind === "native" && this.canvas.getAttribute("layoutsubtree") === null;
-    if (this.ownsNativeLayoutSubtree) {
-      this.canvas.setAttribute("layoutsubtree", "");
+    this.capability = nativeCapability(canvas, ctx);
+    this.nativePaintTimeoutMs = options.nativePaintTimeoutMs ?? 2000;
+    if (!Number.isFinite(this.nativePaintTimeoutMs) || this.nativePaintTimeoutMs <= 0) {
+      throw new Error("nativePaintTimeoutMs must be a positive finite number.");
     }
-    this.surfaces = new SurfaceRegistry(
-      canvas,
-      () => this.invalidate(),
-      () => this.invalidateSurfaceBounds()
-    );
-    this.loop = new FrameLoop();
-    this.loop.addSystem({
-      update: (time) => {
-        this.frameTime = time;
-        for (const handler of this.updateHandlers) {
-          handler(time);
+    canvasOwners.set(canvas, this);
+    try {
+      if (this.backend.kind === "native") {
+        this.releaseNativeCanvas = nativePlatform.activateCanvas(canvas);
+        this.removeNativePaintListener = nativePlatform.onPaint(canvas, () => {
+          if (!this.destroyed) this.flushPaint(false);
+        });
+      }
+      this.surfaces = new SurfaceRegistry(
+        canvas,
+        () => this.invalidate(),
+        () => this.invalidateSurfaceBounds(),
+        this.backend.kind === "native"
+      );
+      this.loop = new FrameLoop();
+      this.loop.addSystem({
+        update: (time) => {
+          this.frameTime = time;
+          for (const handler of this.updateHandlers) {
+            handler(time);
+          }
+          if (this.updateHandlers.length > 0) {
+            this.pendingPaint = true;
+          }
+        },
+        render: () => {
+          if (!this.pendingPaint) {
+            return;
+          }
+
+          if (this.backend.usesNativePaintEvent) {
+            this.requestNativePaintForWaiters();
+          } else {
+            this.flushPaint();
+          }
         }
-        if (this.updateHandlers.length > 0) {
-          this.pendingPaint = true;
-        }
-      },
-      render: () => {
-        if (!this.pendingPaint) {
+      });
+
+      this.hiDpiObserver = observeHiDpiCanvas(canvas, (metrics) => {
+        this.metrics = metrics;
+        this.pendingPaint = true;
+        if (!this.backend.usesNativePaintEvent) {
           return;
         }
+        this.requestNativePaintForWaiters();
+      });
 
-        if (this.backend.usesNativePaintEvent) {
-          this.backend.requestPaint(this.canvas);
-        } else {
-          this.flushPaint();
+      this.metrics = resizeCanvasToDisplaySize(canvas);
+    } catch (error) {
+      const failures: unknown[] = [error];
+      try {
+        for (const cleanup of [
+          () => this.cancelNativeDeadline?.(),
+          () => this.removeNativePaintListener?.(),
+          () => this.hiDpiObserver?.disconnect(),
+          () => this.releaseNativeCanvas?.()
+        ]) {
+          try {
+            cleanup();
+          } catch (cause) {
+            failures.push(cause);
+          }
         }
+      } finally {
+        canvasOwners.delete(canvas);
       }
-    });
-
-    this.hiDpiObserver = observeHiDpiCanvas(canvas, (metrics) => {
-      this.metrics = metrics;
-      this.pendingPaint = true;
-      if (!this.backend.usesNativePaintEvent) {
-        return;
+      if (failures.length > 1) {
+        throw new AggregateError(failures, "Prism runtime creation and cleanup failed.", { cause: error });
       }
-      this.backend.requestPaint(this.canvas);
-    });
-
-    this.metrics = resizeCanvasToDisplaySize(canvas);
-
-    if (this.backend.usesNativePaintEvent && hasNativeHtmlCanvas(this.canvas, this.ctx)) {
-      this.canvas.onpaint = () => {
-        this.flushPaint();
-      };
+      throw error;
     }
+  }
+
+  /** Current capability and native paint health; a snapshot, not a scheduling API. */
+  get diagnostics(): CanvasDiagnostics {
+    return Object.freeze({
+      backend: this.backend.kind,
+      capability: this.capability,
+      ...(this.backend.kind === "native" ? { health: this.nativeHealth } : {}),
+      ...(this.lastNativeError ? { lastError: this.lastNativeError } : {})
+    });
   }
 
   /**
@@ -278,9 +334,8 @@ export class CanvasRuntime {
    * it. Surface bounds are expressed in CSS pixels. Dispose or unregister the
    * returned surface to restore ownership.
    *
-   * Registering the same element with the same runtime more than once returns
-   * the existing surface. New options are not applied; use
-   * `CanvasSurface.setBounds()` to move or resize an existing surface.
+   * Registering an element already owned by an active surface throws, including
+   * within this runtime. Use `CanvasSurface.setBounds()` to move or resize it.
    *
    * @param element - HTML element represented by the surface.
    * @param options - Initial surface bounds and accessibility options.
@@ -431,7 +486,7 @@ export class CanvasRuntime {
 
     this.pendingPaint = true;
     if (this.backend.usesNativePaintEvent) {
-      this.backend.requestPaint(this.canvas);
+      this.requestNativePaintForWaiters();
     }
   }
 
@@ -466,29 +521,42 @@ export class CanvasRuntime {
       return;
     }
 
-    this.stop();
     this.destroyed = true;
-    this.hiDpiObserver.disconnect();
-    if (this.backend.usesNativePaintEvent && hasNativeHtmlCanvas(this.canvas, this.ctx)) {
-      this.canvas.onpaint = null;
-    }
-    if (this.ownsNativeLayoutSubtree) {
-      // Remove only Prism-owned experimental canvas state, preserving app-authored attributes.
-      this.canvas.removeAttribute("layoutsubtree");
-    }
+    const error = new Error(
+      "Cannot complete paintOnce() after Prism CanvasRuntime is destroyed."
+    );
+    this.rejectPaintWaiters(error);
+    for (const waiter of this.activePaintWaiters) waiter.reject(error);
+    this.activePaintWaiters = [];
     this.fallbackPaintScheduled = false;
     this.nativePaintRequestedForWaiters = false;
-    this.rejectPaintWaiters(
-      new Error("Cannot complete paintOnce() after Prism CanvasRuntime is destroyed.")
-    );
-    this.surfaces.clear();
+    let failure: unknown;
+    for (const cleanup of [
+      () => this.loop.stop(),
+      () => this.cancelNativeDeadline?.(),
+      () => this.removeNativePaintListener?.(),
+      () => this.hiDpiObserver?.disconnect(),
+      () => this.surfaces.clear(),
+      () => this.releaseNativeCanvas?.()
+    ]) {
+      try {
+        cleanup();
+      } catch (cause) {
+        failure ??= cause;
+      }
+    }
+    canvasOwners.delete(this.canvas);
     this.updateHandlers.length = 0;
     this.paintHandlers.length = 0;
+    if (failure !== undefined) throw toError(failure);
   }
 
   private flushPaint(throwOnError = true): void {
     const waiters = this.paintWaiters;
     this.paintWaiters = [];
+    this.activePaintWaiters = waiters;
+    this.cancelNativeDeadline?.();
+    this.cancelNativeDeadline = undefined;
     this.nativePaintRequestedForWaiters = false;
     this.pendingPaint = false;
     this.isPainting = true;
@@ -504,23 +572,30 @@ export class CanvasRuntime {
         time: this.frameTime,
         invalidate: () => this.invalidate()
       });
-      for (const waiter of waiters) {
-        waiter.resolve();
+      if (!this.destroyed) {
+        for (const waiter of waiters) waiter.resolve();
+        this.finishNativePaint("healthy");
+        this.lastNativeError = undefined;
       }
     } catch (error) {
       const paintError = toError(error);
       for (const waiter of waiters) {
         waiter.reject(paintError);
       }
-      this.fallbackPaintScheduled = false;
-      this.nativePaintRequestedForWaiters = false;
-      this.rejectPaintWaiters(paintError);
+      this.finishNativePaint("failed");
+      if (paintError instanceof PrismNativeError) this.lastNativeError = paintError;
       if (throwOnError) {
         throw paintError;
       }
     } finally {
+      this.activePaintWaiters = [];
       this.isPainting = false;
     }
+  }
+
+  private finishNativePaint(outcome: "healthy" | "failed"): void {
+    // A paint handler may have requested a new pass during this flush.
+    this.nativeHealth = this.nativePaintRequestedForWaiters ? "pending" : outcome;
   }
 
   private requestNativePaintForWaiters(): void {
@@ -529,7 +604,32 @@ export class CanvasRuntime {
     }
 
     this.nativePaintRequestedForWaiters = true;
-    this.backend.requestPaint(this.canvas);
+    this.nativeHealth = "pending";
+    this.cancelNativeDeadline = visiblePaintDeadline(
+      this.canvas.ownerDocument,
+      this.nativePaintTimeoutMs,
+      () => {
+        this.cancelNativeDeadline = undefined;
+        this.nativePaintRequestedForWaiters = false;
+        this.nativeHealth = "failed";
+        const error = new PrismNativeError(
+          "paint-timeout",
+          "Native canvas paint exceeded its visible-time diagnostic deadline."
+        );
+        this.lastNativeError = error;
+        this.rejectPaintWaiters(error);
+      }
+    );
+    try {
+      this.backend.requestPaint(this.canvas);
+    } catch (error) {
+      this.cancelNativeDeadline();
+      this.cancelNativeDeadline = undefined;
+      this.nativePaintRequestedForWaiters = false;
+      this.nativeHealth = "failed";
+      this.rejectPaintWaiters(toError(error));
+      throw error;
+    }
   }
 
   private invalidateSurfaceBounds(): void {

@@ -46,12 +46,19 @@ export function flushPaintPass(options: PaintPassOptions): void {
   const drawSurface = (surface: CanvasSurface): void => {
     surfaces.assertRegistered(surface);
     const cssBounds = surface.getBounds();
+    // Bounds are application code and may dispose or transfer this surface.
+    surfaces.assertRegistered(surface);
     const pixelBounds = cssRectToCanvasPixels(canvas, metrics, cssBounds);
     backend.render(
       { ctx, time },
       [{ surface, cssBounds, pixelBounds }],
-      syncSurfaceElement
+      (target, transform, bounds) => {
+        surfaces.assertRegistered(target);
+        syncSurfaceElement(target, transform, bounds);
+      }
     );
+    surfaces.assertRegistered(surface);
+    activateSurface(surface);
   };
 
   for (const handler of handlers) {
@@ -69,8 +76,15 @@ function syncSurfaceElement(
   transform: DOMMatrix,
   bounds: Rect
 ): void {
+  if (surface.isDisposed) return;
   surface.element.style.width = `${String(bounds.width)}px`;
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Style callbacks can dispose the surface synchronously.
+  if (surface.isDisposed) return;
   surface.element.style.height = `${String(bounds.height)}px`;
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Style callbacks can dispose the surface synchronously.
+  if (surface.isDisposed) return;
   surface.element.style.transform = transform.toString();
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Style callbacks can dispose the surface synchronously.
+  if (surface.isDisposed) return;
   activateSurface(surface);
 }

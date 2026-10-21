@@ -60,6 +60,12 @@ PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="/path/to/flagged/chromium" pnpm e2e:native
 ```
 
 The native gate verifies `backendKind === "native"`, native `paintOnce()`,
-`drawElementImage()` usage, `canvas.onpaint` cleanup, Prism-owned
-`layoutsubtree` cleanup, and source DOM restoration. Do not skip the fallback
+`drawElementImage()` usage, paint-listener cleanup, Prism-owned
+`content="drawable"` cleanup, and source DOM restoration. Do not skip the fallback
 lifecycle gate just because native support is unavailable.
+
+
+The native lifecycle check does not certify pixels or hit-testing. The separate
+local compatibility fixture records these against an exact installed browser:
+`node scripts/native-compatibility-spike.mjs /absolute/browser /absolute/result.json`.
+A successful collection exit is not an acceptance verdict. Preserve failed results.
