@@ -19,7 +19,6 @@ jobs:
       CI: "1"
       CFT_VERSION: "158.0.8115.0"
       PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
-      EVIDENCE: ${{ runner.temp }}/native-qualification
     defaults:
       run:
         shell: bash
@@ -36,6 +35,8 @@ jobs:
           cache: pnpm
       - name: Record source and runner
         run: |
+          EVIDENCE="$RUNNER_TEMP/native-qualification"
+          printf 'EVIDENCE=%s\n' "$EVIDENCE" >> "$GITHUB_ENV"
           mkdir -p "$EVIDENCE"
           test "$RUNNER_OS/$RUNNER_ARCH" = "Linux/X64"
           test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
@@ -99,6 +100,6 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: native-qualification-${{ github.sha }}-${{ github.run_attempt }}
-          path: ${{ env.EVIDENCE }}/
+          path: ${{ runner.temp }}/native-qualification/
           if-no-files-found: error
           retention-days: 7
