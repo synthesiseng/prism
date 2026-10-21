@@ -1,0 +1,104 @@
+name: Native qualification
+
+on:
+  push:
+    branches:
+      - test/native-platform-compatibility-spike
+    paths:
+      - .github/workflows/native-qualification.yml
+      - scripts/assert-native-result.mjs
+
+permissions:
+  contents: read
+
+jobs:
+  native:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    env:
+      CI: "1"
+      CFT_VERSION: "158.0.8115.0"
+      PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD: "1"
+      EVIDENCE: ${{ runner.temp }}/native-qualification
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - name: Record source and runner
+        run: |
+          mkdir -p "$EVIDENCE"
+          test "$RUNNER_OS/$RUNNER_ARCH" = "Linux/X64"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          {
+            printf 'source=%s\nrun=%s\nattempt=%s\n' "$GITHUB_SHA" "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT"
+            printf 'runner=%s/%s\nimage=%s\nimage_version=%s\n' "$RUNNER_OS" "$RUNNER_ARCH" "$ImageOS" "$ImageVersion"
+            uname -srmo
+            cat /etc/os-release
+            node --version
+            pnpm --version
+            sha256sum pnpm-lock.yaml scripts/native-compatibility-spike.mjs scripts/assert-native-result.mjs
+            sha256sum tests/e2e/spike/index.html playwright.native.config.ts .github/workflows/native-qualification.yml
+          } > "$EVIDENCE/environment.txt"
+      - run: pnpm install --frozen-lockfile
+      - name: Download exact official test browser
+        id: browser
+        run: |
+          browser_dir="$RUNNER_TEMP/chrome-for-testing-$CFT_VERSION"
+          mkdir -p "$browser_dir"
+          url="https://storage.googleapis.com/chrome-for-testing-public/$CFT_VERSION/linux64/chrome-linux64.zip"
+          curl --fail --show-error --silent --location --proto '=https' --proto-redir '=https' --max-time 120 \
+            "https://googlechromelabs.github.io/chrome-for-testing/$CFT_VERSION.json" -o "$EVIDENCE/browser-metadata.json"
+          node --input-type=module - "$EVIDENCE/browser-metadata.json" "$CFT_VERSION" "$url" <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const [file, version, url] = process.argv.slice(2);
+          const metadata = JSON.parse(readFileSync(file, 'utf8'));
+          assert.equal(metadata.version, version);
+          assert.equal(metadata.downloads.chrome.find(item => item.platform === 'linux64')?.url, url);
+          NODE
+          printf '%s\n' "$url" > "$EVIDENCE/browser-url.txt"
+          curl --fail --show-error --silent --location --proto '=https' --proto-redir '=https' --max-time 120 \
+            "$url" -o "$browser_dir/chrome.zip"
+          sha256sum "$browser_dir/chrome.zip" > "$EVIDENCE/browser-sha256.txt"
+          unzip -q "$browser_dir/chrome.zip" -d "$browser_dir"
+          browser="$browser_dir/chrome-linux64/chrome"
+          "$browser" --version | tee "$EVIDENCE/browser-version.txt"
+          test "$("$browser" --version)" = "Google Chrome for Testing $CFT_VERSION " || \
+            test "$("$browser" --version)" = "Google Chrome for Testing $CFT_VERSION"
+          sha256sum "$browser" >> "$EVIDENCE/browser-sha256.txt"
+          pnpm exec playwright --version >> "$EVIDENCE/environment.txt"
+          printf 'PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=%s\n' "$browser" >> "$GITHUB_ENV"
+      - name: Collect and require native pixels and clicks
+        run: |
+          node scripts/native-compatibility-spike.mjs "$PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH" "$EVIDENCE/native.json" 2>&1 | tee "$EVIDENCE/collector.log"
+          node scripts/assert-native-result.mjs "$EVIDENCE/native.json" "$CFT_VERSION" "$GITHUB_SHA" 2>&1 | tee "$EVIDENCE/assertions.log"
+      - name: Require native lifecycle
+        if: ${{ !cancelled() && steps.browser.outcome == 'success' }}
+        run: |
+          PLAYWRIGHT_JSON_OUTPUT_FILE="$EVIDENCE/lifecycle.json" pnpm e2e:native --retries=0 --workers=1 --reporter=list,json 2>&1 | tee "$EVIDENCE/lifecycle.log"
+          node --input-type=module - "$EVIDENCE/lifecycle.json" <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const report = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          assert.equal(report.stats.expected, 1, 'one native lifecycle test passed');
+          for (const field of ['unexpected', 'skipped', 'flaky']) assert.equal(report.stats[field], 0, field);
+          assert.deepEqual(report.errors, [], 'no test runner errors');
+          NODE
+      - name: Retain qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: native-qualification-${{ github.sha }}-${{ github.run_attempt }}
+          path: ${{ env.EVIDENCE }}/
+          if-no-files-found: error
+          retention-days: 7
