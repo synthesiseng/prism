@@ -79,6 +79,22 @@ jobs:
           sha256sum "$browser" >> "$EVIDENCE/browser-sha256.txt"
           pnpm exec playwright --version >> "$EVIDENCE/environment.txt"
           printf 'PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH=%s\n' "$browser" >> "$GITHUB_ENV"
+      - name: Validate existing Chrome sandbox helper
+        run: |
+          helper=/opt/google/chrome/chrome-sandbox
+          {
+            id -u
+            for control in /proc/sys/kernel/apparmor_restrict_unprivileged_userns /proc/sys/user/max_user_namespaces; do
+              if test -r "$control"; then printf '%s=' "$control"; cat "$control"; fi
+            done
+            stat -c 'helper_owner=%u helper_mode=%a path=%n' "$helper"
+          } > "$EVIDENCE/sandbox-preflight.txt"
+          test -f "$helper"
+          test -x "$helper"
+          test -u "$helper"
+          test "$(stat -c '%u:%a' "$helper")" = '0:4755'
+          sha256sum "$helper" >> "$EVIDENCE/sandbox-preflight.txt"
+          printf 'CHROME_DEVEL_SANDBOX=%s\n' "$helper" >> "$GITHUB_ENV"
       - name: Collect and require native pixels and clicks
         run: |
           node scripts/native-compatibility-spike.mjs "$PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH" "$EVIDENCE/native.json" 2>&1 | tee "$EVIDENCE/collector.log"
