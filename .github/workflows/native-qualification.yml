@@ -123,7 +123,7 @@ jobs:
           import assert from 'node:assert/strict';
           import {readFileSync} from 'node:fs';
           const report = JSON.parse(readFileSync(process.argv[2], 'utf8'));
-          assert.equal(report.stats.expected, 1, 'one native lifecycle test passed');
+          assert.equal(report.stats.expected, 7, 'all seven native lifecycle and regression tests passed');
           for (const field of ['unexpected', 'skipped', 'flaky']) assert.equal(report.stats[field], 0, field);
           assert.deepEqual(report.errors, [], 'no test runner errors');
           NODE

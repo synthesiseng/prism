@@ -1,3 +1,4 @@
+import { DomWrites, writeSurfaceAttribute } from "./dom-writes";
 import type { Rect } from "@prism/math";
 import type { HtmlCanvasContext2D, HtmlCanvasElement } from "../experimental-types";
 
@@ -10,13 +11,12 @@ export const nativePlatform = {
         'Prism native canvas requires content="drawable"; incompatible content attribute.'
       );
     }
-    if (content === null) canvas.setAttribute("content", "drawable");
-    return () => {
-      if (content === null) canvas.removeAttribute("content");
-    };
+    const writes = new DomWrites(canvas);
+    if (content === null) writes.setAttribute("content", "drawable");
+    return () => writes.restore();
   },
   activateSurface(element: HTMLElement): void {
-    if (element.getAttribute("drawable") === null) element.setAttribute("drawable", "");
+    if (element.getAttribute("drawable") === null) writeSurfaceAttribute(element, "drawable", "");
   },
   requestPaint(canvas: HTMLCanvasElement): void {
     (canvas as HtmlCanvasElement).requestPaint();

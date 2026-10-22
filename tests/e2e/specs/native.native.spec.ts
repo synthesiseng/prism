@@ -45,3 +45,25 @@ function installConsoleErrorGate(page: Page): void {
     throw error;
   });
 }
+
+
+for (const backend of ["native", "fallback"] as const) {
+  for (const appChanges of [false, true]) {
+    test(`${backend} restores latest frame writes and preserves app changes=${String(appChanges)}`, async ({ page }) => {
+      const result = await page.evaluate(
+        ({ backend, appChanges }) => window.prismLifecycleFixture.testConditionalRestore(backend, appChanges),
+        { backend, appChanges }
+      );
+      for (const [claim, passed] of Object.entries(result)) expect(passed, claim).toBe(true);
+    });
+  }
+}
+
+for (const waiter of [false, true]) {
+  test(`native handler errors preserve identity and platform health with waiter=${String(waiter)}`, async ({ page }) => {
+    const result = await page.evaluate(
+      (waiter) => window.prismLifecycleFixture.testNativeHandlerErrors(waiter), waiter
+    );
+    for (const [claim, passed] of Object.entries(result)) expect(passed, claim).toBe(true);
+  });
+}

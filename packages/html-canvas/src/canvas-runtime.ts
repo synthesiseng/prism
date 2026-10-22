@@ -17,7 +17,7 @@ import {
   cssLengthToCanvasPixels as toCanvasPixelLength,
   cssPointToCanvasPixels as toCanvasPixelPoint
 } from "./runtime/coordinates";
-import { flushPaintPass } from "./runtime/paint-pass";
+import { flushPaintPass, PaintHandlerError } from "./runtime/paint-pass";
 import { SurfaceRegistry } from "./runtime/surface-registry";
 
 /**
@@ -175,6 +175,7 @@ export class CanvasRuntime {
   private nativeHealth: NonNullable<CanvasDiagnostics["health"]> = "idle";
   private lastNativeError: PrismNativeError | undefined;
   private activePaintWaiters: readonly PaintWaiter[] = [];
+  private readonly paintRequestFailures = new Set<unknown>();
   private metrics: CanvasMetrics = {
     cssWidth: 0,
     cssHeight: 0,
@@ -558,6 +559,7 @@ export class CanvasRuntime {
   }
 
   private flushPaint(throwOnError = true): void {
+    this.paintRequestFailures.clear();
     const waiters = this.paintWaiters;
     this.paintWaiters = [];
     this.activePaintWaiters = waiters;
@@ -584,7 +586,17 @@ export class CanvasRuntime {
         this.lastNativeError = undefined;
       }
     } catch (error) {
-      const paintError = toError(error);
+      if (error instanceof PaintHandlerError && !this.paintRequestFailures.has(error.error)) {
+        for (const waiter of waiters) waiter.reject(error.error);
+        // The native paint arrived; an application bug is not a platform failure.
+        if (!this.destroyed) {
+          this.finishNativePaint("healthy");
+          this.lastNativeError = undefined;
+        }
+        if (waiters.length === 0) reportError(error.error);
+        return;
+      }
+      const paintError = toError(error instanceof PaintHandlerError ? error.error : error);
       for (const waiter of waiters) {
         waiter.reject(paintError);
       }
@@ -595,6 +607,7 @@ export class CanvasRuntime {
       }
     } finally {
       this.activePaintWaiters = [];
+      this.paintRequestFailures.clear();
       this.isPainting = false;
     }
   }
@@ -629,6 +642,8 @@ export class CanvasRuntime {
     try {
       this.backend.requestPaint(this.canvas);
     } catch (error) {
+      // Request failures can cross an application handler through invalidate().
+      if (this.isPainting) this.paintRequestFailures.add(error);
       this.cancelNativeDeadline();
       this.cancelNativeDeadline = undefined;
       this.nativePaintRequestedForWaiters = false;

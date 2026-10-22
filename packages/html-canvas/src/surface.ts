@@ -1,3 +1,4 @@
+import { writeSurfaceAttribute } from "./runtime/dom-writes";
 import { Rect, type RectLike } from "@prism/math";
 
 /**
@@ -67,9 +68,9 @@ export class CanvasSurface {
     this.boundsInput = options.bounds;
 
     if (options.ariaLabel) {
-      this.element.setAttribute("aria-label", options.ariaLabel);
+      writeSurfaceAttribute(this.element, "aria-label", options.ariaLabel);
     }
-    this.element.dataset.prismSurface = "true";
+    writeSurfaceAttribute(this.element, "data-prism-surface", "true");
   }
 
   /**

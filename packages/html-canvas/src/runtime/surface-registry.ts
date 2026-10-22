@@ -1,3 +1,4 @@
+import { beginSurfaceWrites, releaseSurfaceWrites, writeSurfaceStyle, type DomWrites } from "./dom-writes";
 import { CanvasSurface, setSurfaceLifecycle, type SurfaceOptions } from "../surface";
 import { nativePlatform } from "./native-platform";
 import { deactivateSurface } from "./surface-activation";
@@ -6,11 +7,7 @@ type SurfaceDomState = Readonly<{
   parent: Node | null;
   nextSibling: Node | null;
   placeholder: ChildNode | null;
-  style: string | null;
-  drawable: string | null;
-  ariaLabel: string | null;
-  prismSurface: string | null;
-  inert: boolean | undefined;
+  writes: DomWrites;
 }>;
 
 type SurfaceRecord = {
@@ -51,11 +48,11 @@ export class SurfaceRegistry {
         invalidate: () => this.onBoundsChange(),
         unregister: (target) => this.unregister(target)
       });
-      surface.element.style.position = "absolute";
-      surface.element.style.left = "0";
-      surface.element.style.top = "0";
+      writeSurfaceStyle(element, "position", "absolute");
+      writeSurfaceStyle(element, "left", "0");
+      writeSurfaceStyle(element, "top", "0");
       if (this.native) nativePlatform.activateSurface(element);
-      else surface.element.style.transformOrigin = "0 0";
+      else writeSurfaceStyle(element, "transform-origin", "0 0");
       deactivateSurface(surface);
       this.assertOpen();
       record = { surface, domState };
@@ -72,6 +69,7 @@ export class SurfaceRegistry {
         try {
           if (domState) restoreSurfaceDomState(element, domState);
         } finally {
+          releaseSurfaceWrites(element);
           elementOwners.delete(element);
           domState?.placeholder?.remove();
         }
@@ -92,6 +90,7 @@ export class SurfaceRegistry {
     try {
       restoreSurfaceDomState(record.surface.element, record.domState);
     } finally {
+      releaseSurfaceWrites(record.surface.element);
       elementOwners.delete(record.surface.element);
       record.domState.placeholder?.remove();
     }
@@ -128,7 +127,6 @@ export class SurfaceRegistry {
 }
 
 function snapshotSurfaceDomState(element: HTMLElement): SurfaceDomState {
-  const inertElement = element as HTMLElement & { inert?: boolean };
   const parent = element.parentNode;
   const nextSibling = element.nextSibling;
   const placeholder = parent
@@ -142,29 +140,12 @@ function snapshotSurfaceDomState(element: HTMLElement): SurfaceDomState {
     parent,
     nextSibling,
     placeholder,
-    style: element.getAttribute("style"),
-    drawable: element.getAttribute("drawable"),
-    ariaLabel: element.getAttribute("aria-label"),
-    prismSurface: element.getAttribute("data-prism-surface"),
-    inert: "inert" in inertElement ? inertElement.inert : undefined
+    writes: beginSurfaceWrites(element)
   };
 }
 
 function restoreSurfaceDomState(element: HTMLElement, state: SurfaceDomState): void {
-  // Restore attributes before moving the element back to its original owner.
-  restoreAttribute(element, "style", state.style);
-  restoreAttribute(element, "drawable", state.drawable);
-  restoreAttribute(element, "aria-label", state.ariaLabel);
-  restoreAttribute(element, "data-prism-surface", state.prismSurface);
-
-  const inertElement = element as HTMLElement & { inert?: boolean };
-  if (state.inert === undefined) {
-    if ("inert" in inertElement) {
-      inertElement.inert = false;
-    }
-  } else {
-    inertElement.inert = state.inert;
-  }
+  state.writes.restore();
 
   if (state.parent) {
     const restoreBefore =
@@ -178,17 +159,4 @@ function restoreSurfaceDomState(element: HTMLElement, state: SurfaceDomState): v
   } else {
     element.remove();
   }
-}
-
-function restoreAttribute(
-  element: HTMLElement,
-  name: string,
-  value: string | null
-): void {
-  if (value === null) {
-    element.removeAttribute(name);
-    return;
-  }
-
-  element.setAttribute(name, value);
 }

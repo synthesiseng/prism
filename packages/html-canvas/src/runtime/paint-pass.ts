@@ -1,3 +1,4 @@
+import { writeSurfaceStyle } from "./dom-writes";
 import type { FrameTime } from "@prism/core";
 import type { Rect } from "@prism/math";
 import type { RuntimeBackend } from "../backend";
@@ -37,37 +38,48 @@ export type PaintPassOptions = Readonly<{
   invalidate: () => void;
 }>;
 
+/** Internal origin marker; callers receive the original thrown value. */
+export class PaintHandlerError extends Error {
+  constructor(readonly error: unknown) { super("Application paint handler failed."); }
+}
+
 export function flushPaintPass(options: PaintPassOptions): void {
   const { canvas, ctx, metrics, backend, surfaces, handlers, time, invalidate } = options;
   ctx.reset();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   surfaces.forEachSurface(deactivateSurface);
 
+  const backendFailures = new Set<unknown>();
   const drawSurface = (surface: CanvasSurface): void => {
     surfaces.assertRegistered(surface);
     const cssBounds = surface.getBounds();
     // Bounds are application code and may dispose or transfer this surface.
     surfaces.assertRegistered(surface);
     const pixelBounds = cssRectToCanvasPixels(canvas, metrics, cssBounds);
-    backend.render(
-      { ctx, time },
-      [{ surface, cssBounds, pixelBounds }],
-      (target, transform, bounds) => {
-        surfaces.assertRegistered(target);
-        syncSurfaceElement(target, transform, bounds);
-      }
-    );
+    try {
+      backend.render(
+        { ctx, time },
+        [{ surface, cssBounds, pixelBounds }],
+        (target, transform, bounds) => {
+          surfaces.assertRegistered(target);
+          syncSurfaceElement(target, transform, bounds);
+        }
+      );
+    } catch (error) {
+      backendFailures.add(error);
+      throw error;
+    }
     surfaces.assertRegistered(surface);
     activateSurface(surface);
   };
 
   for (const handler of handlers) {
-    handler({
-      ctx,
-      time,
-      drawSurface,
-      invalidate
-    });
+    try {
+      handler({ ctx, time, drawSurface, invalidate });
+    } catch (error) {
+      if (backendFailures.has(error)) throw error;
+      throw new PaintHandlerError(error);
+    }
   }
 }
 
@@ -77,13 +89,13 @@ function syncSurfaceElement(
   bounds: Rect
 ): void {
   if (surface.isDisposed) return;
-  surface.element.style.width = `${String(bounds.width)}px`;
+  writeSurfaceStyle(surface.element, "width", `${String(bounds.width)}px`);
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Style callbacks can dispose the surface synchronously.
   if (surface.isDisposed) return;
-  surface.element.style.height = `${String(bounds.height)}px`;
+  writeSurfaceStyle(surface.element, "height", `${String(bounds.height)}px`);
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Style callbacks can dispose the surface synchronously.
   if (surface.isDisposed) return;
-  surface.element.style.transform = transform.toString();
+  writeSurfaceStyle(surface.element, "transform", transform.toString());
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Style callbacks can dispose the surface synchronously.
   if (surface.isDisposed) return;
   activateSurface(surface);

@@ -204,8 +204,12 @@ hit-testing failure by rewriting transforms or pointer coordinates.
 
 A canvas has one live runtime, and an element has one active surface within this
 module instance. Duplicate registration throws, including within the same runtime.
-Dispose or unregister before registering an element again. App-authored attributes
-are preserved; Prism removes attributes it added when it releases the resource.
+Dispose or unregister before registering an element again. On release, Prism restores
+an initial attribute or style property only if its current value still matches
+Prism's last write. Application changes to other values survive cleanup, including
+CSS transforms. This also applies to each per-frame `pointer-events` and `inert`
+write. If an application writes exactly Prism's value, that write is indistinguishable
+and cleanup restores the initial value. DOM parent placement is restored as before.
 
 `stop()` stops animation, leaving explicit `paintOnce()` requests active.
 Concurrent callers share the next pass; requests made inside a paint handler wait
@@ -220,6 +224,11 @@ browser scheduling guarantee or a measured performance target.
 `healthy`, `failed`). Capability describes API presence, not verified rendering.
 `PrismNativeError` reports `paint-timeout` or `draw-failed`; draw failures preserve
 the original exception as `cause`. A later successful paint can restore health.
+Application paint-handler exceptions reject the callers waiting for that pass with
+the original thrown value. When none are waiting, Prism calls `reportError()`.
+Application exceptions do not become native errors, enter `lastError`, or mark
+platform health failed; a delivered native pass can be healthy even when app code
+throws. A request for a later pass remains pending.
 The backend never changes silently after construction. Legacy or partial native
 API shapes are rejected in forced native mode; legacy users can pin alpha.8.
 
