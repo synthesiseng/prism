@@ -21,6 +21,7 @@ test("native backend paints a DOM surface and cleans up native canvas state", as
   expect(result.paintOnceResolved).toBe(true);
   expect(result.drawElementImageCalls).toBeGreaterThan(0);
   expect(result.paintObservedWhileActive).toBe(true);
+  expect(result.paintListenerCountWhileActive).toBe(1);
   expect(result.paintListenerRemovedAfterDestroy).toBe(true);
   expect(result.contentDrawableWhileActive).toBe(true);
   expect(result.contentRemovedAfterDestroy).toBe(true);

@@ -60,6 +60,7 @@ type NativeLifecycleResult = Readonly<{
   paintOnceResolved: boolean;
   drawElementImageCalls: number;
   paintObservedWhileActive: boolean;
+  paintListenerCountWhileActive: number;
   paintListenerRemovedAfterDestroy: boolean;
   contentDrawableWhileActive: boolean;
   contentRemovedAfterDestroy: boolean;
@@ -374,6 +375,25 @@ async function testNativeLifecycle(): Promise<NativeLifecycleResult> {
 
   const ctx = canvas.getContext("2d");
   const drawElementImageState = observeDrawElementImage(ctx);
+  const paintListeners = new Set<EventListenerOrEventListenerObject>();
+  const addListener = canvas.addEventListener.bind(canvas);
+  const removeListener = canvas.removeEventListener.bind(canvas);
+  canvas.addEventListener = (
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions
+  ) => {
+    addListener(type, listener, options);
+    if (type === "paint" && listener) paintListeners.add(listener);
+  };
+  canvas.removeEventListener = (
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions
+  ) => {
+    removeListener(type, listener, options);
+    if (type === "paint" && listener) paintListeners.delete(listener);
+  };
   let runtime: CanvasRuntime;
 
   try {
@@ -404,16 +424,16 @@ async function testNativeLifecycle(): Promise<NativeLifecycleResult> {
   await runtime.paintOnce();
   paintOnceResolved = true;
   const paintObservedWhileActive = paintCount > 0;
+  const paintListenerCountWhileActive = paintListeners.size;
   runtime.destroy();
-  const afterDestroy = paintCount;
-  canvas.dispatchEvent(new Event("paint"));
 
   const result: NativeLifecycleResult = {
     backendKind: runtime.backendKind,
     paintOnceResolved,
     drawElementImageCalls: drawElementImageState.calls,
     paintObservedWhileActive,
-    paintListenerRemovedAfterDestroy: paintCount === afterDestroy,
+    paintListenerCountWhileActive,
+    paintListenerRemovedAfterDestroy: paintListeners.size === 0,
     contentDrawableWhileActive,
     contentRemovedAfterDestroy: !canvas.hasAttribute("content"),
     parentRestored: element.parentElement === root,

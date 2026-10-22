@@ -39,6 +39,17 @@ async function setup(options) {
   button.addEventListener('click', () => { clicks++; });
   el.append(button);
   root.append(canvas, el);
+  let runtime, surface, pending, draw;
+  const cleanup = () => {
+    try { runtime?.destroy(); }
+    finally {
+      if (draw) canvas.removeEventListener('paint', draw);
+      root.remove();
+      if (active?.root === root) active = undefined;
+    }
+  };
+  active = { root, cleanup };
+  try {
   document.body.append(root);
   if (assetUrl) {
     const img = new Image();
@@ -55,11 +66,10 @@ async function setup(options) {
   const ctx = canvas.getContext('2d');
   let bounds = { x: 40, y: 40, width: 120, height: 80 };
   let drawn = true;
-  let runtime, surface, pending;
   let paintEvents = 0;
   const observations = [];
   const started = performance.now();
-  const draw = () => {
+  draw = () => {
     paintEvents++;
     ctx.reset();
     const before = performance.now();
@@ -115,11 +125,6 @@ async function setup(options) {
       y: bounds.y + 40 + 7 + (x - 60) * Math.sin(radians) + (y - 40) * Math.cos(radians) };
   };
   const colorAtSource = (x, y) => { const point = sourcePoint(x, y); return sample(point.x, point.y); };
-  const cleanup = () => {
-    runtime?.destroy();
-    canvas.removeEventListener('paint', draw);
-    root.remove();
-  };
   active = { canvas, el, button, runtime, surface, root, paint, cleanup,
     get clicks() { return clicks; }, get bounds() { return bounds; },
     relocate() { bounds = { ...bounds, x: 220, y: 130 }; surface?.setBounds(bounds); },
@@ -140,6 +145,11 @@ async function setup(options) {
   }
   const result = await paint();
   return { ...result, readyMs: performance.now() - started, details: active.details(), pixels: result.status === 'painted' ? active.sample() : null };
+  } catch (error) {
+    let cleanupError;
+    try { cleanup(); } catch (cause) { cleanupError = errorInfo(cause); }
+    return { status: 'setup-error', error: errorInfo(error), ...(cleanupError ? { cleanupError } : {}) };
+  }
 }
 
 function ownership() {
@@ -151,16 +161,17 @@ function ownership() {
   const first = new CanvasRuntime(a, { backend: 'native' });
   const second = new CanvasRuntime(b, { backend: 'native' });
   let third, secondSurface;
+  let elementError = null, canvasError = null;
   const options = { bounds: { x: 0, y: 0, width: 40, height: 30 } };
   const initial = first.registerSurface(el, options);
   let elementAccepted = false, canvasAccepted = false;
-  try { secondSurface = second.registerSurface(el, options); elementAccepted = true; } catch { /* Refusal is recorded by the corresponding false acceptance flag. */ }
+  try { secondSurface = second.registerSurface(el, options); elementAccepted = true; } catch (error) { elementError = errorInfo(error); }
   const afterSecondInB = el.parentElement === b;
   initial.dispose();
   const firstDisposeStoleFromB = elementAccepted && el.parentElement !== b;
-  try { third = new CanvasRuntime(a, { backend: 'native' }); canvasAccepted = true; } catch { /* Refusal is recorded by the corresponding false acceptance flag. */ }
+  try { third = new CanvasRuntime(a, { backend: 'native' }); canvasAccepted = true; } catch (error) { canvasError = errorInfo(error); }
   const result = { duplicateElementAccepted: elementAccepted, afterSecondInB, firstDisposeStoleFromB,
-    secondSurfaceStillLive: secondSurface ? !secondSurface.isDisposed : null, duplicateCanvasAccepted: canvasAccepted };
+    secondSurfaceStillLive: secondSurface ? !secondSurface.isDisposed : null, duplicateCanvasAccepted: canvasAccepted, elementError, canvasError };
   third?.destroy(); first.destroy(); second.destroy(); root.remove();
   return result;
 }

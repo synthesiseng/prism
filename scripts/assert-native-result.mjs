@@ -85,6 +85,26 @@ assert.equal(
   false,
   "exclusive canvas ownership"
 );
+for (const [field, message] of [
+  ["elementError", "Prism surface element is already owned by an active surface."],
+  ["canvasError", "Prism canvas is already owned by an active runtime."]
+]) {
+  assert.equal(result.ownership?.[field]?.name, "Error", "ownership error type");
+  assert.equal(result.ownership?.[field]?.message, message, "ownership refusal cause");
+}
+assert.equal(result.setupFailures?.length, 3, "complete setup failure coverage");
+for (const phase of ["decode", "request", "sample"]) {
+  const rows = result.setupFailures.filter((row) => row.phase === phase);
+  assert.equal(rows.length, 1, "unique setup failure phase");
+  assert.equal(rows[0].result?.status, "setup-error", "setup failure is recorded");
+  assert.deepEqual(
+    rows[0].result?.error,
+    { name: "Error", message: `injected-${phase}` },
+    "setup failure preserves cause"
+  );
+  assert.equal(rows[0].remainingRoots, 0, "setup failure cleans inserted DOM");
+  assert.equal(rows[0].result.cleanupError, undefined, "setup cleanup succeeds");
+}
 assert.equal(result.coalescing?.setup?.status, "painted", "coalescing setup");
 assert.deepEqual(
   result.coalescing?.setup?.details?.errors,

@@ -4,6 +4,11 @@ export function visiblePaintDeadline(
   duration: number,
   expire: () => void
 ): () => void {
+  if (!Number.isFinite(duration) || duration <= 0 || duration > 2 ** 31 - 1) {
+    throw new RangeError(
+      "nativePaintTimeoutMs must be greater than 0 and at most 2147483647."
+    );
+  }
   let remaining = duration;
   let started: number | undefined;
   let timer: ReturnType<typeof setTimeout> | undefined;

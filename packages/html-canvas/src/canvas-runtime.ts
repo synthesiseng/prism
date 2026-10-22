@@ -211,8 +211,14 @@ export class CanvasRuntime {
     this.backend = selectRuntimeBackend(canvas, ctx, options.backend);
     this.capability = nativeCapability(canvas, ctx);
     this.nativePaintTimeoutMs = options.nativePaintTimeoutMs ?? 2000;
-    if (!Number.isFinite(this.nativePaintTimeoutMs) || this.nativePaintTimeoutMs <= 0) {
-      throw new Error("nativePaintTimeoutMs must be a positive finite number.");
+    if (
+      !Number.isFinite(this.nativePaintTimeoutMs) ||
+      this.nativePaintTimeoutMs <= 0 ||
+      this.nativePaintTimeoutMs > 2 ** 31 - 1
+    ) {
+      throw new RangeError(
+        "nativePaintTimeoutMs must be greater than 0 and at most 2147483647."
+      );
     }
     canvasOwners.set(canvas, this);
     try {
@@ -240,7 +246,7 @@ export class CanvasRuntime {
           }
         },
         render: () => {
-          if (!this.pendingPaint) {
+          if (this.destroyed || !this.pendingPaint) {
             return;
           }
 
@@ -599,7 +605,7 @@ export class CanvasRuntime {
   }
 
   private requestNativePaintForWaiters(): void {
-    if (this.nativePaintRequestedForWaiters) {
+    if (this.destroyed || this.nativePaintRequestedForWaiters) {
       return;
     }
 

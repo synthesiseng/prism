@@ -116,6 +116,24 @@ try {
   ]) {
     report.assets.push({ kind, result: await withPage(1, page => page.evaluate(options => window.nativeSpike.setup(options), { mode: 'raw', assetUrl, assetCors, assetBackground })) });
   }
+  report.setupFailures = [];
+  for (const phase of ['decode', 'request', 'sample']) {
+    report.setupFailures.push(await withPage(1, page => page.evaluate(async phase => {
+      const before = document.body.children.length;
+      const prototype = phase === 'decode' ? HTMLImageElement.prototype
+        : phase === 'request' ? HTMLCanvasElement.prototype : CanvasRenderingContext2D.prototype;
+      const method = phase === 'decode' ? 'decode' : phase === 'request' ? 'requestPaint' : 'getImageData';
+      const original = prototype[method];
+      prototype[method] = () => { throw new Error(`injected-${phase}`); };
+      let result;
+      try {
+        result = await window.nativeSpike.setup({ mode: 'raw', ...(phase === 'decode' ? { assetUrl: '/color.svg' } : {}) });
+      } catch (error) {
+        result = { status: 'unhandled-setup-error', error: { name: error.name, message: error.message } };
+      } finally { prototype[method] = original; }
+      return { phase, result, remainingRoots: document.body.children.length - before };
+    }, phase)));
+  }
   report.ownership = await withPage(1, page => page.evaluate(() => window.nativeSpike.ownership()));
   report.coalescing = await withPage(1, async page => {
     const setup = await page.evaluate(() => window.nativeSpike.setup({ mode: 'prism' }));

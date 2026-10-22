@@ -361,6 +361,40 @@ describe("CanvasRuntime", () => {
     vi.unstubAllGlobals();
   });
 
+  it.each(["visible", "hidden"] as const)(
+    "does not reacquire native resources after destruction during update: %s",
+    (visibility) => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+      try {
+        document.setVisibility(visibility);
+        const raf = new ManualRaf();
+        vi.stubGlobal("requestAnimationFrame", raf.request);
+        vi.stubGlobal("cancelAnimationFrame", raf.cancel);
+        const canvas = new FakeCanvas(true);
+        canvas.ownerDocument = document;
+        const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement, {
+          backend: "native",
+          nativePaintTimeoutMs: 100
+        });
+        canvas.requestPaintCount = 0;
+        runtime.onUpdate(() => runtime.destroy());
+        runtime.start();
+        raf.step();
+
+        expect.soft(canvas.requestPaintCount).toBe(0);
+        expect.soft(document.visibilityListeners.size).toBe(0);
+        expect.soft(vi.getTimerCount()).toBe(0);
+        expect.soft(raf.pendingCount).toBe(0);
+        runtime.destroy();
+        expect.soft(document.visibilityListeners.size).toBe(0);
+        expect.soft(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+      }
+    }
+  );
+
   describe("backend selection", () => {
     it("prefers the native HTML-in-Canvas backend when available", () => {
       const canvas = new FakeCanvas(true);
@@ -1738,6 +1772,38 @@ describe("CanvasRuntime", () => {
     afterEach(() => {
       vi.useRealTimers();
     });
+    it.each([0, -1, NaN, Infinity, -Infinity, 2 ** 31, Number.MAX_VALUE])(
+      "rejects invalid native timeout %s without acquiring canvas ownership",
+      (timeout) => {
+        const canvas = new FakeCanvas(true);
+        canvas.ownerDocument = document;
+        expect(
+          () =>
+            new CanvasRuntime(canvas as unknown as HTMLCanvasElement, {
+              backend: "native",
+              nativePaintTimeoutMs: timeout
+            })
+        ).toThrow(RangeError);
+        const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement, {
+          backend: "native",
+          nativePaintTimeoutMs: 2 ** 31 - 1
+        });
+        runtime.destroy();
+        expect(document.visibilityListeners.size).toBe(0);
+        expect(vi.getTimerCount()).toBe(0);
+      }
+    );
+    it("accepts the maximum timer duration without early expiration", async () => {
+      const { canvas, runtime } = native(2 ** 31 - 1);
+      const paint = runtime.paintOnce();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(runtime.diagnostics.health).toBe("pending");
+      emitPaint(canvas);
+      await paint;
+      runtime.destroy();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
     it("distinguishes legacy and partial shapes without claiming working rendering", () => {
       const canvas = new FakeCanvas(true);
       canvas.ownerDocument = document;
