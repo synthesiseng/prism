@@ -59,10 +59,11 @@ type NativeLifecycleResult = Readonly<{
   backendKind: string;
   paintOnceResolved: boolean;
   drawElementImageCalls: number;
-  canvasOnpaintInstalledWhileActive: boolean;
-  canvasOnpaintClearedAfterDestroy: boolean;
-  layoutSubtreePresentWhileActive: boolean;
-  layoutSubtreeRemovedAfterDestroy: boolean;
+  paintObservedWhileActive: boolean;
+  paintListenerCountWhileActive: number;
+  paintListenerRemovedAfterDestroy: boolean;
+  contentDrawableWhileActive: boolean;
+  contentRemovedAfterDestroy: boolean;
   parentRestored: boolean;
   styleRestored: boolean;
   ariaLabelRestored: boolean;
@@ -168,7 +169,9 @@ async function runCreateDestroyCycles(cycles: number): Promise<LifecycleCycleRes
     runtime.destroy();
 
     if (paintCount < 2 || updateCount < 1) {
-      throw new Error("Expected runtime update and paint handlers to run during lifecycle cycle.");
+      throw new Error(
+        "Expected runtime update and paint handlers to run during lifecycle cycle."
+      );
     }
 
     const restoredElements = sources.filter((source, index) =>
@@ -186,7 +189,8 @@ async function runCreateDestroyCycles(cycles: number): Promise<LifecycleCycleRes
     results.push({
       cycle,
       backendKind: runtime.backendKind,
-      retainedPrismSurfaceElements: document.querySelectorAll("[data-prism-surface]").length,
+      retainedPrismSurfaceElements:
+        document.querySelectorAll("[data-prism-surface]").length,
       retainedPrismComments: countPrismComments(document.body),
       retainedCanvases: document.querySelectorAll("canvas").length,
       restoredElements,
@@ -228,7 +232,8 @@ async function testDisposedSurfaceBehavior(): Promise<DisposedSurfaceResult> {
     isDisposed: surface.isDisposed,
     parentRestored: element.parentElement === root,
     styleRestored: element.getAttribute("style") === snapshot.style,
-    prismAttributeRemoved: element.getAttribute("data-prism-surface") === snapshot.prismSurface,
+    prismAttributeRemoved:
+      element.getAttribute("data-prism-surface") === snapshot.prismSurface,
     getBoundsThrew,
     setBoundsThrew,
     drawDisposedRejected
@@ -310,7 +315,8 @@ async function testNoPaintLoopAfterDestroy(): Promise<PaintLoopResult> {
     paintCountBeforeDestroy,
     updateCountAfterDestroy: updateCount,
     paintCountAfterDestroy: paintCount,
-    stopped: updateCount === updateCountBeforeDestroy && paintCount === paintCountBeforeDestroy
+    stopped:
+      updateCount === updateCountBeforeDestroy && paintCount === paintCountBeforeDestroy
   };
 
   root.remove();
@@ -350,7 +356,8 @@ async function testResizeBoundsCleanup(): Promise<ResizeCleanupResult> {
   const result: ResizeCleanupResult = {
     parentRestored: element.parentElement === root,
     styleRestored: element.getAttribute("style") === snapshot.style,
-    prismAttributeRemoved: element.getAttribute("data-prism-surface") === snapshot.prismSurface,
+    prismAttributeRemoved:
+      element.getAttribute("data-prism-surface") === snapshot.prismSurface,
     noRetainedCanvasChildren: canvas.children.length === 0,
     noRetainedPrismComments: countPrismComments(root) === 0
   };
@@ -368,6 +375,25 @@ async function testNativeLifecycle(): Promise<NativeLifecycleResult> {
 
   const ctx = canvas.getContext("2d");
   const drawElementImageState = observeDrawElementImage(ctx);
+  const paintListeners = new Set<EventListenerOrEventListenerObject>();
+  const addListener = canvas.addEventListener.bind(canvas);
+  const removeListener = canvas.removeEventListener.bind(canvas);
+  canvas.addEventListener = (
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | AddEventListenerOptions
+  ) => {
+    addListener(type, listener, options);
+    if (type === "paint" && listener) paintListeners.add(listener);
+  };
+  canvas.removeEventListener = (
+    type: string,
+    listener: EventListenerOrEventListenerObject | null,
+    options?: boolean | EventListenerOptions
+  ) => {
+    removeListener(type, listener, options);
+    if (type === "paint" && listener) paintListeners.delete(listener);
+  };
   let runtime: CanvasRuntime;
 
   try {
@@ -386,33 +412,38 @@ async function testNativeLifecycle(): Promise<NativeLifecycleResult> {
     ariaLabel: "Native runtime surface"
   });
   let paintOnceResolved = false;
+  let paintCount = 0;
 
   runtime.onPaint(({ drawSurface }) => {
+    paintCount++;
     drawSurface(surface);
   });
 
-  const canvasOnpaintInstalledWhileActive = canvas.onpaint !== null;
-  const layoutSubtreePresentWhileActive = canvas.getAttribute("layoutsubtree") === "";
+  const contentDrawableWhileActive = canvas.getAttribute("content") === "drawable";
 
   await runtime.paintOnce();
   paintOnceResolved = true;
-
+  const paintObservedWhileActive = paintCount > 0;
+  const paintListenerCountWhileActive = paintListeners.size;
   runtime.destroy();
 
   const result: NativeLifecycleResult = {
     backendKind: runtime.backendKind,
     paintOnceResolved,
     drawElementImageCalls: drawElementImageState.calls,
-    canvasOnpaintInstalledWhileActive,
-    canvasOnpaintClearedAfterDestroy: canvas.onpaint == null,
-    layoutSubtreePresentWhileActive,
-    layoutSubtreeRemovedAfterDestroy: !canvas.hasAttribute("layoutsubtree"),
+    paintObservedWhileActive,
+    paintListenerCountWhileActive,
+    paintListenerRemovedAfterDestroy: paintListeners.size === 0,
+    contentDrawableWhileActive,
+    contentRemovedAfterDestroy: !canvas.hasAttribute("content"),
     parentRestored: element.parentElement === root,
     styleRestored: element.getAttribute("style") === snapshot.style,
     ariaLabelRestored: element.getAttribute("aria-label") === snapshot.ariaLabel,
     appDataPreserved: element.getAttribute("data-app-owned") === snapshot.appOwned,
-    prismAttributeRemoved: element.getAttribute("data-prism-surface") === snapshot.prismSurface,
-    noRetainedPrismSurfaceElements: document.querySelectorAll("[data-prism-surface]").length === 0,
+    prismAttributeRemoved:
+      element.getAttribute("data-prism-surface") === snapshot.prismSurface,
+    noRetainedPrismSurfaceElements:
+      document.querySelectorAll("[data-prism-surface]").length === 0,
     noRetainedPrismComments: countPrismComments(document.body) === 0,
     noRetainedCanvases: document.querySelectorAll("canvas").length === 1
   };
@@ -441,7 +472,11 @@ function createCanvas(cycle: number): HTMLCanvasElement {
   return canvas;
 }
 
-function createSourceElements(parent: HTMLElement, cycle: number, count: number): HTMLElement[] {
+function createSourceElements(
+  parent: HTMLElement,
+  cycle: number,
+  count: number
+): HTMLElement[] {
   const elements: HTMLElement[] = [];
   for (let index = 0; index < count; index += 1) {
     const element = createSourceElement(cycle, index);
@@ -470,7 +505,7 @@ function createSourceElement(cycle: number, index: number): HTMLElement {
 
 function cycleBounds(cycle: number, index: number): Bounds {
   return {
-    x: 8 + index * 34 + cycle % 7,
+    x: 8 + index * 34 + (cycle % 7),
     y: 12 + index * 14,
     width: 80 + index * 5,
     height: 36 + index * 4
@@ -499,11 +534,11 @@ function matchesSnapshot(
 ): boolean {
   return Boolean(
     snapshot &&
-      element.parentElement === snapshot.parent &&
-      element.getAttribute("style") === snapshot.style &&
-      element.getAttribute("aria-label") === snapshot.ariaLabel &&
-      element.getAttribute("data-app-owned") === snapshot.appOwned &&
-      element.getAttribute("data-prism-surface") === snapshot.prismSurface
+    element.parentElement === snapshot.parent &&
+    element.getAttribute("style") === snapshot.style &&
+    element.getAttribute("aria-label") === snapshot.ariaLabel &&
+    element.getAttribute("data-app-owned") === snapshot.appOwned &&
+    element.getAttribute("data-prism-surface") === snapshot.prismSurface
   );
 }
 
@@ -564,7 +599,11 @@ function observeDrawElementImage(
   const nativeContext: NativeCanvasContext | null = context;
 
   if (!nativeContext?.drawElementImage) {
-    return { get calls() { return 0; } };
+    return {
+      get calls() {
+        return 0;
+      }
+    };
   }
 
   const originalDrawElementImage = nativeContext.drawElementImage.bind(nativeContext);

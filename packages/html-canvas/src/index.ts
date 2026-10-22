@@ -4,7 +4,9 @@ export type {
   CanvasBackendPreference,
   CanvasPoint,
   CanvasRuntimeOptions,
+  CanvasDiagnostics,
   PaintHandler,
   UpdateHandler
 } from "./canvas-runtime";
 export type { CanvasSurface, SurfaceBoundsInput, SurfaceOptions } from "./surface";
+export { PrismNativeError } from "./native-error";

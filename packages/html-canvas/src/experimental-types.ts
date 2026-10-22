@@ -8,15 +8,13 @@
  */
 export type HtmlCanvasContext2D = CanvasRenderingContext2D & {
   /**
-   * Draws an HTML element into the canvas and returns the DOM transform.
+   * Draws an HTML element into the canvas; the browser synchronizes its geometry.
    *
    * @param element - Element to draw into the canvas.
    * @param dx - Destination X coordinate in backing-store pixels.
    * @param dy - Destination Y coordinate in backing-store pixels.
    * @param dWidth - Optional destination width in backing-store pixels.
    * @param dHeight - Optional destination height in backing-store pixels.
-   * @returns Transform used to synchronize the accessible DOM element, or
-   * `null` when the experimental browser API cannot provide one for the draw.
    */
   drawElementImage(
     element: Element,
@@ -24,7 +22,7 @@ export type HtmlCanvasContext2D = CanvasRenderingContext2D & {
     dy: number,
     dWidth?: number,
     dHeight?: number
-  ): DOMMatrix | null;
+  ): void;
 };
 
 /**
@@ -61,9 +59,20 @@ export function hasNativeHtmlCanvas(
   context: CanvasRenderingContext2D
 ): canvas is HtmlCanvasElement {
   return (
+    "content" in canvas &&
     "requestPaint" in canvas &&
     typeof (canvas as Partial<HtmlCanvasElement>).requestPaint === "function" &&
     "drawElementImage" in context &&
     typeof (context as Partial<HtmlCanvasContext2D>).drawElementImage === "function"
   );
+}
+
+/** Shape detection is not proof that the browser renders or hit-tests correctly. */
+export function nativeCapability(
+  canvas: HTMLCanvasElement,
+  context: CanvasRenderingContext2D
+): "supported" | "unavailable" | "unsupported-version" {
+  if (typeof (context as Partial<HtmlCanvasContext2D>).drawElementImage !== "function")
+    return "unavailable";
+  return hasNativeHtmlCanvas(canvas, context) ? "supported" : "unsupported-version";
 }

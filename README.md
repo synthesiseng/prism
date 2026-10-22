@@ -181,9 +181,9 @@ import type {
 new CanvasRuntime(canvas, options);
 ```
 
-**Options:** `backend: "auto" | "native" | "fallback"`
+**Options:** `backend: "auto" | "native" | "fallback"`, `nativePaintTimeoutMs`
 
-**Properties:** `canvas` · `width` · `height` · `pixelRatio` · `backendKind`
+**Properties:** `canvas` · `width` · `height` · `pixelRatio` · `backendKind` · `diagnostics`
 
 **Methods:** `registerSurface()` · `unregisterSurface()` · `onUpdate()` · `onPaint()` · `invalidate()` · `paintOnce()` · `start()` · `stop()` · `destroy()` · `clientToCanvasPoint()` · `cssLengthToCanvasPixels()` · `cssPointToCanvasPixels()`
 
@@ -194,6 +194,39 @@ Returned by `registerSurface()`. Do not construct directly.
 **Properties:** `element` · `isDisposed`
 
 **Methods:** `getBounds()` · `setBounds()` · `dispose()`
+
+## Native lifecycle
+
+The current native path uses canvas `content="drawable"` and surface `drawable`.
+Prism supplies drawing bounds; the browser synchronizes native input geometry.
+Application CSS transforms are preserved. Prism never compensates for a browser
+hit-testing failure by rewriting transforms or pointer coordinates.
+
+A canvas has one live runtime, and an element has one active surface within this
+module instance. Duplicate registration throws, including within the same runtime.
+Dispose or unregister before registering an element again. App-authored attributes
+are preserved; Prism removes attributes it added when it releases the resource.
+
+`stop()` stops animation, leaving explicit `paintOnce()` requests active.
+Concurrent callers share the next pass; requests made inside a paint handler wait
+for a later pass. `destroy()` rejects outstanding requests and releases resources.
+
+Native requests have a visible-time diagnostic deadline (`nativePaintTimeoutMs`).
+Hidden time pauses the remaining budget without resetting it; a paint completed
+while hidden still succeeds. The default is provisionally 2000 ms and is not a
+browser scheduling guarantee or a measured performance target.
+
+`diagnostics` reports backend, capability and native health (`idle`, `pending`,
+`healthy`, `failed`). Capability describes API presence, not verified rendering.
+`PrismNativeError` reports `paint-timeout` or `draw-failed`; draw failures preserve
+the original exception as `cause`. A later successful paint can restore health.
+The backend never changes silently after construction. Legacy or partial native
+API shapes are rejected in forced native mode; legacy users can pin alpha.8.
+
+Exact-browser compatibility qualification remains open. Local tests do not
+establish general browser support. The fallback draws placeholders, not HTML.
+Native `drawable` also creates isolation; synthetic tests show that some remote
+image content is omitted, so image/export fidelity must be checked per use case.
 
 ## Considerations
 

@@ -86,7 +86,25 @@ class FakeStyle {
   }
 }
 
-class FakeElement {
+class FakeElement extends EventTarget {
+  readonly paintListeners = new Set<EventListenerOrEventListenerObject>();
+  override addEventListener(
+    type: string,
+    callback: EventListenerOrEventListenerObject | null,
+    options?: AddEventListenerOptions | boolean
+  ): void {
+    super.addEventListener(type, callback, options);
+    if (type === "paint" && callback) this.paintListeners.add(callback);
+  }
+  override removeEventListener(
+    type: string,
+    callback: EventListenerOrEventListenerObject | null,
+    options?: EventListenerOptions | boolean
+  ): void {
+    super.removeEventListener(type, callback, options);
+    if (type === "paint" && callback) this.paintListeners.delete(callback);
+  }
+
   readonly style = new FakeStyle();
   readonly dataset: Record<string, string> = {};
   readonly children: FakeElement[] = [];
@@ -96,7 +114,9 @@ class FakeElement {
   parentElement: FakeElement | null = null;
   inert = false;
 
-  constructor(readonly tagName: string) {}
+  constructor(readonly tagName: string) {
+    super();
+  }
 
   get nextSibling(): FakeElement | null {
     if (!this.parentNode) {
@@ -222,6 +242,7 @@ class FakeCanvasContext {
 }
 
 class FakeCanvas extends FakeElement {
+  content = "fallback";
   width = 0;
   height = 0;
   clientWidth = 300;
@@ -261,7 +282,31 @@ class FakeCanvas extends FakeElement {
   }
 }
 
-class FakeDocument {
+class FakeDocument extends EventTarget {
+  visibilityState: DocumentVisibilityState = "visible";
+  readonly visibilityListeners = new Set<EventListenerOrEventListenerObject>();
+  override addEventListener(
+    type: string,
+    callback: EventListenerOrEventListenerObject | null,
+    options?: AddEventListenerOptions | boolean
+  ): void {
+    super.addEventListener(type, callback, options);
+    if (type === "visibilitychange" && callback) this.visibilityListeners.add(callback);
+  }
+  override removeEventListener(
+    type: string,
+    callback: EventListenerOrEventListenerObject | null,
+    options?: EventListenerOptions | boolean
+  ): void {
+    super.removeEventListener(type, callback, options);
+    if (type === "visibilitychange" && callback)
+      this.visibilityListeners.delete(callback);
+  }
+  setVisibility(value: DocumentVisibilityState): void {
+    this.visibilityState = value;
+    this.dispatchEvent(new Event("visibilitychange"));
+  }
+
   createElement(tagName: string): FakeElement {
     const element =
       tagName.toLowerCase() === "canvas"
@@ -276,6 +321,11 @@ class FakeDocument {
     element.ownerDocument = this;
     return element;
   }
+}
+
+function emitPaint(canvas: FakeCanvas): void {
+  canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, new Event("paint"));
+  canvas.dispatchEvent(new Event("paint"));
 }
 
 type RuntimeInternals = {
@@ -311,6 +361,40 @@ describe("CanvasRuntime", () => {
     vi.unstubAllGlobals();
   });
 
+  it.each(["visible", "hidden"] as const)(
+    "does not reacquire native resources after destruction during update: %s",
+    (visibility) => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+      try {
+        document.setVisibility(visibility);
+        const raf = new ManualRaf();
+        vi.stubGlobal("requestAnimationFrame", raf.request);
+        vi.stubGlobal("cancelAnimationFrame", raf.cancel);
+        const canvas = new FakeCanvas(true);
+        canvas.ownerDocument = document;
+        const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement, {
+          backend: "native",
+          nativePaintTimeoutMs: 100
+        });
+        canvas.requestPaintCount = 0;
+        runtime.onUpdate(() => runtime.destroy());
+        runtime.start();
+        raf.step();
+
+        expect.soft(canvas.requestPaintCount).toBe(0);
+        expect.soft(document.visibilityListeners.size).toBe(0);
+        expect.soft(vi.getTimerCount()).toBe(0);
+        expect.soft(raf.pendingCount).toBe(0);
+        runtime.destroy();
+        expect.soft(document.visibilityListeners.size).toBe(0);
+        expect.soft(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.clearAllTimers();
+        vi.useRealTimers();
+      }
+    }
+  );
+
   describe("backend selection", () => {
     it("prefers the native HTML-in-Canvas backend when available", () => {
       const canvas = new FakeCanvas(true);
@@ -319,7 +403,7 @@ describe("CanvasRuntime", () => {
       const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
 
       expect(runtime.backendKind).toBe("native");
-      expect(canvas.getAttribute("layoutsubtree")).toBe("");
+      expect(canvas.getAttribute("content")).toBe("drawable");
 
       canvas.requestPaintCount = 0;
       runtime.invalidate();
@@ -385,7 +469,7 @@ describe("CanvasRuntime", () => {
       runtime.destroy();
     });
 
-    it("returns the existing surface when the same element is registered again", () => {
+    it("rejects duplicate registration within one runtime", () => {
       const canvas = new FakeCanvas(false);
       canvas.ownerDocument = document;
       const element = document.createElement("section");
@@ -393,29 +477,16 @@ describe("CanvasRuntime", () => {
       const surface = runtime.registerSurface(element as unknown as HTMLElement, {
         bounds: { x: 1, y: 2, width: 30, height: 40 }
       });
-
-      const sameSurface = runtime.registerSurface(element as unknown as HTMLElement, {
-        bounds: { x: 10, y: 20, width: 300, height: 400 }
-      });
-
-      expect(sameSurface).toBe(surface);
-      expect(surface.getBounds()).toEqual({
-        x: 1,
-        y: 2,
-        width: 30,
-        height: 40
-      });
-
-      surface.setBounds({ x: 10, y: 20, width: 300, height: 400 });
-
-      expect(surface.getBounds()).toEqual({
-        x: 10,
-        y: 20,
-        width: 300,
-        height: 400
-      });
-
-      runtime.destroy();
+      try {
+        expect(() =>
+          runtime.registerSurface(element as unknown as HTMLElement, {
+            bounds: { x: 10, y: 20, width: 300, height: 400 }
+          })
+        ).toThrow(/already.*own/i);
+        expect(surface.getBounds()).toEqual({ x: 1, y: 2, width: 30, height: 40 });
+      } finally {
+        runtime.destroy();
+      }
     });
 
     it("requests native paint when bounds update outside paint", () => {
@@ -430,7 +501,7 @@ describe("CanvasRuntime", () => {
       canvas.requestPaintCount = 0;
       surface.setBounds({ x: 10, y: 20, width: 30, height: 40 });
 
-      expect(canvas.requestPaintCount).toBe(1);
+      expect(canvas.requestPaintCount).toBe(0);
 
       runtime.destroy();
     });
@@ -515,12 +586,16 @@ describe("CanvasRuntime", () => {
       });
 
       canvas.requestPaintCount = 0;
-      canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+      emitPaint(canvas);
 
       expect(canvas.requestPaintCount).toBe(0);
-      expect(element.style.width).toBe("30px");
-      expect(element.style.height).toBe("40px");
-      expect(element.style.transform).toBe("matrix(1, 0, 0, 1, 12, 18)");
+      expect(canvas.context.drawElementImageCalls.at(-1)).toMatchObject({
+        x: 20,
+        y: 40,
+        width: 60,
+        height: 80
+      });
+      expect(element.style.transform).toBe("");
 
       runtime.destroy();
     });
@@ -706,7 +781,7 @@ describe("CanvasRuntime", () => {
         drawSurface(firstSurface);
       });
 
-      canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+      emitPaint(canvas);
 
       expect(canvas.context.drawElementImageCalls).toEqual([
         {
@@ -728,7 +803,7 @@ describe("CanvasRuntime", () => {
       runtime.destroy();
     });
 
-    it("falls back to CSS bounds when native drawElementImage returns no transform", () => {
+    it("preserves source transform when native drawElementImage returns no transform", () => {
       const canvas = new FakeCanvas(true);
       canvas.ownerDocument = document;
       canvas.context.drawElementImage = (element, x, y, width, height) => {
@@ -745,9 +820,9 @@ describe("CanvasRuntime", () => {
         drawSurface(surface);
       });
 
-      canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+      emitPaint(canvas);
 
-      expect(element.style.transform).toBe("matrix(1, 0, 0, 1, 10, 20)");
+      expect(element.style.transform).toBe("");
 
       runtime.destroy();
     });
@@ -908,10 +983,10 @@ describe("CanvasRuntime", () => {
 
       await Promise.resolve();
 
-      expect(canvas.requestPaintCount).toBe(1);
+      expect(canvas.requestPaintCount).toBe(0);
       expect(resolved).toBe(false);
 
-      canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+      emitPaint(canvas);
       await paint;
 
       expect(resolved).toBe(true);
@@ -942,11 +1017,11 @@ describe("CanvasRuntime", () => {
 
       await Promise.resolve();
 
-      expect(canvas.requestPaintCount).toBe(1);
+      expect(canvas.requestPaintCount).toBe(0);
       expect(firstResolved).toBe(false);
       expect(secondResolved).toBe(false);
 
-      canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+      emitPaint(canvas);
       await Promise.all([firstPaint, secondPaint]);
 
       expect(paintCount).toBe(1);
@@ -977,14 +1052,14 @@ describe("CanvasRuntime", () => {
 
       canvas.requestPaintCount = 0;
       const firstPaint = runtime.paintOnce();
-      canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+      emitPaint(canvas);
       await firstPaint;
 
       expect(nestedPaints).toHaveLength(1);
-      expect(canvas.requestPaintCount).toBe(2);
+      expect(canvas.requestPaintCount).toBe(1);
       expect(nestedResolvedAtPaintCount).toBe(0);
 
-      canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
+      emitPaint(canvas);
       await Promise.all(nestedPaints);
 
       expect(paintCount).toBe(2);
@@ -1065,9 +1140,7 @@ describe("CanvasRuntime", () => {
       const paint = runtime.paintOnce();
       const rejected = expect(paint).rejects.toThrow("native paint failed");
 
-      expect(() => {
-        canvas.onpaint?.call(canvas as unknown as HTMLCanvasElement, {} as Event);
-      }).toThrow("native paint failed");
+      emitPaint(canvas);
       await rejected;
 
       runtime.destroy();
@@ -1429,14 +1502,14 @@ describe("CanvasRuntime", () => {
         bounds: { x: 0, y: 0, width: 100, height: 50 }
       });
 
-      expect(canvas.onpaint).not.toBeNull();
-      expect(canvas.getAttribute("layoutsubtree")).toBe("");
+      expect(canvas.paintListeners.size).toBe(1);
+      expect(canvas.getAttribute("content")).toBe("drawable");
       expect(element.parentElement).toBe(canvas);
 
       runtime.destroy();
 
-      expect(canvas.onpaint).toBeNull();
-      expect(canvas.getAttribute("layoutsubtree")).toBeNull();
+      expect(canvas.paintListeners.size).toBe(0);
+      expect(canvas.getAttribute("content")).toBeNull();
       expect(surface.isDisposed).toBe(true);
       expect(parent.children).toEqual([element]);
       expect(element.getAttribute("style")).toBeNull();
@@ -1465,8 +1538,8 @@ describe("CanvasRuntime", () => {
         runtime.destroy();
         runtime.destroy();
       }).not.toThrow();
-      expect(canvas.onpaint).toBeNull();
-      expect(canvas.getAttribute("layoutsubtree")).toBeNull();
+      expect(canvas.paintListeners.size).toBe(0);
+      expect(canvas.getAttribute("content")).toBeNull();
     });
 
     it("keeps stop idempotent and safe after destroy", () => {
@@ -1493,7 +1566,9 @@ describe("CanvasRuntime", () => {
 
       expect(() => {
         runtime.start();
-      }).toThrow("Cannot start a destroyed CanvasRuntime. Create a new CanvasRuntime instead.");
+      }).toThrow(
+        "Cannot start a destroyed CanvasRuntime. Create a new CanvasRuntime instead."
+      );
       expect(() => {
         runtime.onPaint(() => {});
       }).toThrow(
@@ -1570,4 +1645,544 @@ describe("CanvasRuntime", () => {
       }).not.toThrow();
     });
   });
+  describe("exclusive ownership regressions", () => {
+    const bounds = { x: 0, y: 0, width: 20, height: 20 };
+    function makeRuntime(document: FakeDocument) {
+      const canvas = new FakeCanvas(false);
+      canvas.ownerDocument = document;
+      return {
+        canvas,
+        runtime: new CanvasRuntime(canvas as unknown as HTMLCanvasElement)
+      };
+    }
+    it("rejects cross-runtime claims without moving the first owner's element", () => {
+      const first = makeRuntime(document),
+        second = makeRuntime(document);
+      const element = document.createElement("section");
+      const surface = first.runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds
+      });
+      try {
+        expect(() =>
+          second.runtime.registerSurface(element as unknown as HTMLElement, { bounds })
+        ).toThrow(/already.*own/i);
+        expect(element.parentElement).toBe(first.canvas);
+        surface.dispose();
+        const replacement = second.runtime.registerSurface(
+          element as unknown as HTMLElement,
+          { bounds }
+        );
+        first.runtime.destroy();
+        expect(element.parentElement).toBe(second.canvas);
+        expect(replacement.isDisposed).toBe(false);
+      } finally {
+        first.runtime.destroy();
+        second.runtime.destroy();
+      }
+    });
+    it("rejects a second runtime on an owned canvas and releases it on destroy", () => {
+      const first = makeRuntime(document);
+      let unexpected: CanvasRuntime | undefined;
+      try {
+        expect(() => {
+          unexpected = new CanvasRuntime(first.canvas as unknown as HTMLCanvasElement);
+        }).toThrow(/already.*own/i);
+      } finally {
+        unexpected?.destroy();
+        first.runtime.destroy();
+      }
+      const next = new CanvasRuntime(first.canvas as unknown as HTMLCanvasElement);
+      next.destroy();
+    });
+    it("rolls back registration when its invalidation throws", () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const parent = document.createElement("main"),
+        element = document.createElement("section");
+      parent.appendChild(element);
+      canvas.requestPaint = () => {
+        throw new Error("request refused");
+      };
+      try {
+        expect(() =>
+          runtime.registerSurface(element as unknown as HTMLElement, { bounds })
+        ).toThrow("request refused");
+        expect(parent.children).toEqual([element]);
+        expect(element.getAttribute("data-prism-surface")).toBeNull();
+        canvas.requestPaint = () => {};
+        const replacement = runtime.registerSurface(element as unknown as HTMLElement, {
+          bounds
+        });
+        expect(replacement.isDisposed).toBe(false);
+      } finally {
+        canvas.requestPaint = () => {};
+        runtime.destroy();
+      }
+    });
+    it("releases every owner when one DOM restoration throws during destroy", () => {
+      const first = makeRuntime(document),
+        second = makeRuntime(document);
+      const parent = document.createElement("main");
+      const a = document.createElement("section"),
+        b = document.createElement("aside");
+      parent.appendChild(a);
+      parent.appendChild(b);
+      const sa = first.runtime.registerSurface(a as unknown as HTMLElement, { bounds });
+      const sb = first.runtime.registerSurface(b as unknown as HTMLElement, { bounds });
+      const restore = parent.insertBefore.bind(parent);
+      const spy = vi.spyOn(parent, "insertBefore").mockImplementation((el, before) => {
+        if (el === a) throw new Error("restore refused");
+        return restore(el, before);
+      });
+      try {
+        expect(() => first.runtime.destroy()).toThrow("restore refused");
+        expect(sa.isDisposed).toBe(true);
+        expect(sb.isDisposed).toBe(true);
+        expect(b.parentElement).toBe(parent);
+      } finally {
+        spy.mockRestore();
+      }
+      try {
+        expect(() =>
+          second.runtime.registerSurface(a as unknown as HTMLElement, { bounds })
+        ).not.toThrow();
+        expect(() =>
+          second.runtime.registerSurface(b as unknown as HTMLElement, { bounds })
+        ).not.toThrow();
+      } finally {
+        second.runtime.destroy();
+      }
+    });
+  });
+
+  describe("current native contract", () => {
+    function native(timeout = 100) {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement, {
+        backend: "native",
+        nativePaintTimeoutMs: timeout
+      });
+      return { canvas, runtime };
+    }
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+    it.each([0, -1, NaN, Infinity, -Infinity, 2 ** 31, Number.MAX_VALUE])(
+      "rejects invalid native timeout %s without acquiring canvas ownership",
+      (timeout) => {
+        const canvas = new FakeCanvas(true);
+        canvas.ownerDocument = document;
+        expect(
+          () =>
+            new CanvasRuntime(canvas as unknown as HTMLCanvasElement, {
+              backend: "native",
+              nativePaintTimeoutMs: timeout
+            })
+        ).toThrow(RangeError);
+        const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement, {
+          backend: "native",
+          nativePaintTimeoutMs: 2 ** 31 - 1
+        });
+        runtime.destroy();
+        expect(document.visibilityListeners.size).toBe(0);
+        expect(vi.getTimerCount()).toBe(0);
+      }
+    );
+    it("accepts the maximum timer duration without early expiration", async () => {
+      const { canvas, runtime } = native(2 ** 31 - 1);
+      const paint = runtime.paintOnce();
+      await vi.advanceTimersByTimeAsync(10);
+      expect(runtime.diagnostics.health).toBe("pending");
+      emitPaint(canvas);
+      await paint;
+      runtime.destroy();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("distinguishes legacy and partial shapes without claiming working rendering", () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      delete (canvas as Partial<FakeCanvas>).content;
+      expect(
+        () =>
+          new CanvasRuntime(canvas as unknown as HTMLCanvasElement, { backend: "native" })
+      ).toThrow(/alpha.8/);
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      expect(runtime.backendKind).toBe("fallback");
+      expect(runtime.diagnostics.capability).toBe("unsupported-version");
+      runtime.destroy();
+      canvas.content = "fallback";
+      delete canvas.requestPaint;
+      expect(
+        () =>
+          new CanvasRuntime(canvas as unknown as HTMLCanvasElement, { backend: "native" })
+      ).toThrow(/unsupported/);
+    });
+    it("cleans up a failed constructor so the same canvas can be retried", () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const getRect = vi.spyOn(canvas, "addEventListener").mockImplementation(() => {
+        throw new Error("listener refused");
+      });
+      expect(() => new CanvasRuntime(canvas as unknown as HTMLCanvasElement)).toThrow(
+        "listener refused"
+      );
+      expect(canvas.getAttribute("content")).toBeNull();
+      getRect.mockRestore();
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      runtime.destroy();
+      expect(canvas.paintListeners.size).toBe(0);
+    });
+    it("manages current attributes and leaves application transforms untouched", async () => {
+      const { canvas, runtime } = native();
+      const element = document.createElement("section");
+      element.style.transform = "translate(13px, 7px) rotate(8deg)";
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 10, y: 20, width: 30, height: 40 }
+      });
+      runtime.onPaint(({ drawSurface }) => drawSurface(surface));
+      try {
+        expect(canvas.getAttribute("content")).toBe("drawable");
+        expect(element.getAttribute("drawable")).toBe("");
+        const paint = runtime.paintOnce();
+        emitPaint(canvas);
+        await paint;
+        expect(element.style.transform).toBe("translate(13px, 7px) rotate(8deg)");
+        expect(element.style.pointerEvents).toBe("auto");
+        expect(runtime.diagnostics.health).toBe("healthy");
+      } finally {
+        runtime.destroy();
+      }
+      expect(canvas.getAttribute("content")).toBeNull();
+      expect(element.getAttribute("drawable")).toBeNull();
+    });
+    it("preserves app-owned current attributes and refuses incompatible content", () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      canvas.setAttribute("content", "fallback");
+      expect(() => new CanvasRuntime(canvas as unknown as HTMLCanvasElement)).toThrow(
+        /content/
+      );
+      canvas.setAttribute("content", "drawable");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const el = document.createElement("section");
+      el.setAttribute("drawable", "app");
+      runtime.registerSurface(el as unknown as HTMLElement, {
+        bounds: { x: 0, y: 0, width: 5, height: 5 }
+      });
+      runtime.destroy();
+      expect(canvas.getAttribute("content")).toBe("drawable");
+      expect(el.getAttribute("drawable")).toBe("app");
+    });
+    it("resumes remaining visible time without resetting across visibility changes or stop", async () => {
+      const { runtime } = native();
+      const rejected = runtime.paintOnce().catch((error: unknown) => error);
+      try {
+        await vi.advanceTimersByTimeAsync(30);
+        document.setVisibility("hidden");
+        await vi.advanceTimersByTimeAsync(500);
+        runtime.stop();
+        document.setVisibility("visible");
+        await vi.advanceTimersByTimeAsync(30);
+        document.setVisibility("hidden");
+        await vi.advanceTimersByTimeAsync(500);
+        document.setVisibility("visible");
+        await vi.advanceTimersByTimeAsync(39);
+        expect(runtime.diagnostics.health).toBe("pending");
+        await vi.advanceTimersByTimeAsync(1);
+        expect(await rejected).toMatchObject({ code: "paint-timeout" });
+        expect(runtime.diagnostics.health).toBe("failed");
+        expect(document.visibilityListeners.size).toBe(0);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        runtime.destroy();
+      }
+    });
+    it("settles a paint while hidden and removes its visibility listener", async () => {
+      document.setVisibility("hidden");
+      const { canvas, runtime } = native();
+      const paint = runtime.paintOnce();
+      try {
+        await vi.advanceTimersByTimeAsync(1000);
+        emitPaint(canvas);
+        await paint;
+        expect(runtime.diagnostics.health).toBe("healthy");
+        expect(document.visibilityListeners.size).toBe(0);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        runtime.destroy();
+      }
+    });
+    it("coalesces waiters but keeps a request inside paint for the next pass", async () => {
+      const { canvas, runtime } = native();
+      let next: Promise<void> | undefined,
+        nextSettled = false;
+      runtime.onPaint(() => {
+        if (!next)
+          next = runtime.paintOnce().then(() => {
+            nextSettled = true;
+          });
+      });
+      const first = runtime.paintOnce(),
+        second = runtime.paintOnce();
+      try {
+        expect(canvas.requestPaintCount).toBe(1);
+        emitPaint(canvas);
+        await Promise.all([first, second]);
+        expect(nextSettled).toBe(false);
+        expect(runtime.diagnostics.health).toBe("pending");
+        emitPaint(canvas);
+        await next;
+        expect(nextSettled).toBe(true);
+        expect(document.visibilityListeners.size).toBe(0);
+      } finally {
+        runtime.destroy();
+      }
+    });
+    it("does not revive timed-out callers on a late paint and can recover health", async () => {
+      const { canvas, runtime } = native();
+      let settled = 0;
+      const result = runtime.paintOnce().then(
+        () => {
+          settled++;
+        },
+        (error: unknown) => {
+          settled++;
+          return error;
+        }
+      );
+      try {
+        await vi.advanceTimersByTimeAsync(100);
+        const error = await result;
+        expect(error).toMatchObject({ code: "paint-timeout" });
+        emitPaint(canvas);
+        expect(settled).toBe(1);
+        expect(await result).toBe(error);
+        expect(runtime.diagnostics.health).toBe("healthy");
+        expect(runtime.backendKind).toBe("native");
+      } finally {
+        runtime.destroy();
+      }
+    });
+    it("rejects all waiters and releases deadline resources on destroy", async () => {
+      const { runtime } = native();
+      const a = runtime.paintOnce().catch((error: unknown) => error),
+        b = runtime.paintOnce().catch((error: unknown) => error);
+      runtime.destroy();
+      expect(await a).toBeInstanceOf(Error);
+      expect(await b).toBeInstanceOf(Error);
+      expect(document.visibilityListeners.size).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+    it("wraps a native draw error once with its original cause", async () => {
+      const { canvas, runtime } = native();
+      const cause = new Error("browser draw refused");
+      const el = document.createElement("section");
+      const surface = runtime.registerSurface(el as unknown as HTMLElement, {
+        bounds: { x: 0, y: 0, width: 5, height: 5 }
+      });
+      canvas.context.drawElementImage = () => {
+        throw cause;
+      };
+      runtime.onPaint(({ drawSurface }) => drawSurface(surface));
+      const result = runtime.paintOnce().catch((error: unknown) => error);
+      try {
+        try {
+          emitPaint(canvas);
+        } catch {
+          /* Baseline onpaint propagates the draw error. */
+        }
+        expect(await result).toMatchObject({ code: "draw-failed", cause });
+        expect(runtime.diagnostics.health).toBe("failed");
+        expect(runtime.backendKind).toBe("native");
+      } finally {
+        runtime.destroy();
+      }
+    });
+    it("rejects a request destroyed from inside its own paint handler", async () => {
+      const { canvas, runtime } = native();
+      runtime.onPaint(() => runtime.destroy());
+      const result = runtime.paintOnce().then(
+        () => "resolved",
+        (error: unknown) => error
+      );
+      emitPaint(canvas);
+      expect(await result).toBeInstanceOf(Error);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
+  describe("reentrant ownership regressions", () => {
+    const bounds = { x: 0, y: 0, width: 20, height: 20 };
+    it("releases canvas ownership even if constructor rollback throws", () => {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const add = vi.spyOn(canvas, "addEventListener").mockImplementation(() => {
+        throw new Error("initial listener refusal");
+      });
+      const remove = vi.spyOn(canvas, "removeAttribute").mockImplementation(() => {
+        throw new Error("cleanup attribute refusal");
+      });
+      expect(() => new CanvasRuntime(canvas as unknown as HTMLCanvasElement)).toThrow();
+      add.mockRestore(); remove.mockRestore();
+      let replacement: CanvasRuntime | undefined;
+      try {
+        expect(() => { replacement = new CanvasRuntime(canvas as unknown as HTMLCanvasElement); }).not.toThrow();
+      } finally { replacement?.destroy(); }
+    });
+    it("does not leave a new live surface after a DOM callback destroys the registering runtime", () => {
+      const canvas = new FakeCanvas(false); canvas.ownerDocument = document;
+      const nextCanvas = new FakeCanvas(false); nextCanvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const next = new CanvasRuntime(nextCanvas as unknown as HTMLCanvasElement);
+      const parent = document.createElement("main"), element = document.createElement("custom-element");
+      parent.appendChild(element);
+      const append = canvas.appendChild.bind(canvas);
+      const spy = vi.spyOn(canvas, "appendChild").mockImplementation(el => {
+        const result = append(el);
+        runtime.destroy(); // models synchronous custom-element connectedCallback
+        return result;
+      });
+      let leaked: ReturnType<CanvasRuntime["registerSurface"]> | undefined;
+      try {
+        try { leaked = runtime.registerSurface(element as unknown as HTMLElement, { bounds }); } catch { /* Registration may correctly reject destruction. */ }
+        expect(() => next.registerSurface(element as unknown as HTMLElement, { bounds })).not.toThrow();
+      } finally { spy.mockRestore(); leaked?.dispose(); runtime.destroy(); next.destroy(); }
+    });
+    it("does not draw or reactivate a surface disposed by its public bounds callback", async () => {
+      const canvas = new FakeCanvas(true); canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const element = document.createElement("section");
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: () => {
+        surface.dispose();
+        return bounds;
+      } });
+      runtime.onPaint(({ drawSurface }) => drawSurface(surface));
+      const result = runtime.paintOnce().catch((error: unknown) => error);
+      try {
+        emitPaint(canvas); await result;
+        expect(canvas.context.drawElementImageCalls).toHaveLength(0);
+        expect(element.style.pointerEvents).not.toBe("auto");
+      } finally { runtime.destroy(); }
+    });
+  });
+
+  it("rolls back registration destroyed by an attribute callback", () => {
+    const canvas = new FakeCanvas(true); canvas.ownerDocument = document;
+    const nextCanvas = new FakeCanvas(false); nextCanvas.ownerDocument = document;
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+    const next = new CanvasRuntime(nextCanvas as unknown as HTMLCanvasElement);
+    const parent = document.createElement("main"), element = document.createElement("section");
+    parent.appendChild(element);
+    const set = element.setAttribute.bind(element);
+    const spy = vi.spyOn(element, "setAttribute").mockImplementation((name, value) => {
+      set(name, value);
+      if (name === "drawable") runtime.destroy();
+    });
+    try {
+      expect(() => runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 20, height: 20 } })).toThrow();
+      expect(element.parentElement).toBe(parent);
+      expect(() => next.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 20, height: 20 } })).not.toThrow();
+    } finally { spy.mockRestore(); runtime.destroy(); next.destroy(); }
+  });
+  it("does not mutate a new owner after a bounds callback transfers its element", async () => {
+    const canvas = new FakeCanvas(true); canvas.ownerDocument = document;
+    const nextCanvas = new FakeCanvas(false); nextCanvas.ownerDocument = document;
+    const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+    const next = new CanvasRuntime(nextCanvas as unknown as HTMLCanvasElement);
+    const element = document.createElement("section");
+    const bounds = { x: 0, y: 0, width: 20, height: 20 };
+    const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: () => {
+      surface.dispose();
+      next.registerSurface(element as unknown as HTMLElement, { bounds });
+      return bounds;
+    } });
+    runtime.onPaint(({ drawSurface }) => drawSurface(surface));
+    const result = runtime.paintOnce().catch((error: unknown) => error);
+    try {
+      emitPaint(canvas);
+      expect(await result).toBeInstanceOf(Error);
+      expect(canvas.context.drawElementImageCalls).toHaveLength(0);
+      expect(element.parentElement).toBe(nextCanvas);
+      expect(element.style.pointerEvents).toBe("none");
+    } finally { runtime.destroy(); next.destroy(); }
+  });
+
+  describe("attribute callback ownership", () => {
+    it.each([false, true])("preserves restored inert after activation disposes a surface (native=%s)", async (native) => {
+      const canvas = new FakeCanvas(native); canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const element = document.createElement("section");
+      element.inert = true;
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 20, height: 20 } });
+      let pointerEvents = element.style.pointerEvents;
+      Object.defineProperty(element.style, "pointerEvents", {
+        configurable: true,
+        get: () => pointerEvents,
+        set: (value: string) => { pointerEvents = value; if (value === "auto") surface.dispose(); }
+      });
+      runtime.onPaint(({ drawSurface }) => drawSurface(surface));
+      const result = runtime.paintOnce().catch((error: unknown) => error);
+      if (native) emitPaint(canvas);
+      await result;
+      expect(surface.isDisposed).toBe(true);
+      expect(element.inert).toBe(true);
+      runtime.destroy();
+    });
+    it.each(["width", "height", "transform"] as const)("stops fallback writes after a %s callback disposes a surface", async (trigger) => {
+      const canvas = new FakeCanvas(false); canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const element = document.createElement("section");
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 20, height: 20 } });
+      const staleWrites: string[] = [];
+      let disposing = false;
+      for (const key of ["width", "height", "transform", "pointerEvents"] as const) {
+        let current = element.style[key];
+        Object.defineProperty(element.style, key, {
+          configurable: true,
+          get: () => current,
+          set: (value: string) => {
+            current = value;
+            if (surface.isDisposed && !disposing) staleWrites.push(key);
+            if (key === trigger && !surface.isDisposed) {
+              disposing = true; surface.dispose(); disposing = false;
+            }
+          }
+        });
+      }
+      runtime.onPaint(({ drawSurface }) => drawSurface(surface));
+      await runtime.paintOnce().catch((error: unknown) => error);
+      expect(surface.isDisposed).toBe(true);
+      expect(staleWrites).toEqual([]);
+      runtime.destroy();
+    });
+    it.each([false, true])("deactivates remaining surfaces after a callback removes the first (native=%s)", async (native) => {
+      const canvas = new FakeCanvas(native); canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const first = document.createElement("section"), second = document.createElement("section");
+      const bounds = { x: 0, y: 0, width: 20, height: 20 };
+      const one = runtime.registerSurface(first as unknown as HTMLElement, { bounds });
+      const two = runtime.registerSurface(second as unknown as HTMLElement, { bounds });
+      let draw = true;
+      runtime.onPaint(({ drawSurface }) => { if (draw) { drawSurface(one); drawSurface(two); } });
+      const initial = runtime.paintOnce(); if (native) emitPaint(canvas); await initial;
+      draw = false;
+      let current = first.style.pointerEvents;
+      Object.defineProperty(first.style, "pointerEvents", {
+        configurable: true,
+        get: () => current,
+        set: (value: string) => { current = value; if (value === "none") one.dispose(); }
+      });
+      const result = runtime.paintOnce(); if (native) emitPaint(canvas); await result;
+      expect(one.isDisposed).toBe(true);
+      expect(second.style.pointerEvents).toBe("none");
+      expect(second.inert).toBe(true);
+      runtime.destroy();
+    });
+  });
+
 });
