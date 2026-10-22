@@ -43,18 +43,25 @@ export class PaintHandlerError extends Error {
   constructor(readonly error: unknown) { super("Application paint handler failed."); }
 }
 
-export function flushPaintPass(options: PaintPassOptions): void {
+export function flushPaintPass(options: PaintPassOptions): boolean {
   const { canvas, ctx, metrics, backend, surfaces, handlers, time, invalidate } = options;
   ctx.reset();
   ctx.clearRect(0, 0, canvas.width, canvas.height);
-  surfaces.forEachSurface(deactivateSurface);
+  const native = backend.usesNativePaintEvent;
+  const drawn = new Set<CanvasSurface>();
+  if (!native) surfaces.forEachSurface(deactivateSurface);
 
+  let complete = true;
   const backendFailures = new Set<unknown>();
   const drawSurface = (surface: CanvasSurface): void => {
     surfaces.assertRegistered(surface);
     const cssBounds = surface.getBounds();
     // Bounds are application code and may dispose or transfer this surface.
     surfaces.assertRegistered(surface);
+    if (!surfaces.layoutReady(surface, cssBounds)) {
+      complete = false;
+      return;
+    }
     const pixelBounds = cssRectToCanvasPixels(canvas, metrics, cssBounds);
     try {
       backend.render(
@@ -71,16 +78,35 @@ export function flushPaintPass(options: PaintPassOptions): void {
     }
     surfaces.assertRegistered(surface);
     activateSurface(surface);
+    drawn.add(surface);
   };
 
-  for (const handler of handlers) {
-    try {
-      handler({ ctx, time, drawSurface, invalidate });
-    } catch (error) {
-      if (backendFailures.has(error)) throw error;
-      throw new PaintHandlerError(error);
+  let failure: { error: unknown } | undefined;
+  try {
+    for (const handler of handlers) {
+      try {
+        handler({ ctx, time, drawSurface, invalidate });
+      } catch (error) {
+        if (backendFailures.has(error)) throw error;
+        throw new PaintHandlerError(error);
+      }
+    }
+  } catch (error) {
+    failure = { error };
+  } finally {
+    if (native) {
+      // Keep stable active sources unchanged: toggling inert before application
+      // layout reads can invalidate the next native snapshot indefinitely.
+      surfaces.forEachSurface((surface) => {
+        if (drawn.has(surface)) return;
+        try { deactivateSurface(surface); }
+        catch (error) { failure ??= { error }; }
+      });
     }
   }
+  if (failure) throw failure.error;
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drawSurface can mark the pass incomplete from a handler callback.
+  return complete && !surfaces.hasPendingLayout;
 }
 
 function syncSurfaceElement(

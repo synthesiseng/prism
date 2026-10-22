@@ -176,6 +176,7 @@ export class CanvasRuntime {
   private lastNativeError: PrismNativeError | undefined;
   private activePaintWaiters: readonly PaintWaiter[] = [];
   private readonly paintRequestFailures = new Set<unknown>();
+  private isPreparingLayout = false;
   private metrics: CanvasMetrics = {
     cssWidth: 0,
     cssHeight: 0,
@@ -186,6 +187,7 @@ export class CanvasRuntime {
   private frameTime: FrameTime = { now: 0, delta: 0, frame: 0 };
   private pendingPaint = true;
   private isPainting = false;
+  private layoutPreparationScheduled = false;
   private destroyed = false;
 
   /**
@@ -451,7 +453,9 @@ export class CanvasRuntime {
    * the pass that is already in progress and never recursively paints.
    *
    * The method does not export image data; use standard canvas APIs after the
-   * promise resolves.
+   * promise resolves. A native pass needing a new layout snapshot remains pending
+   * and retries within the same visible-time budget. Paint handlers may run again;
+   * drawing already performed in an incomplete pass is not rolled back.
    *
    * @returns A promise that resolves after one runtime-owned paint pass.
    */
@@ -493,6 +497,7 @@ export class CanvasRuntime {
 
     this.pendingPaint = true;
     if (this.backend.usesNativePaintEvent) {
+      if (!this.isPainting) this.surfaces.prepareLayout();
       this.requestNativePaintForWaiters();
     }
   }
@@ -563,14 +568,15 @@ export class CanvasRuntime {
     const waiters = this.paintWaiters;
     this.paintWaiters = [];
     this.activePaintWaiters = waiters;
-    this.cancelNativeDeadline?.();
+    const passDeadline = this.cancelNativeDeadline;
     this.cancelNativeDeadline = undefined;
     this.nativePaintRequestedForWaiters = false;
     this.pendingPaint = false;
     this.isPainting = true;
+    let incomplete = false;
 
     try {
-      flushPaintPass({
+      const complete = flushPaintPass({
         canvas: this.canvas,
         ctx: this.ctx,
         metrics: this.metrics,
@@ -580,6 +586,20 @@ export class CanvasRuntime {
         time: this.frameTime,
         invalidate: () => this.invalidate()
       });
+      if (!this.destroyed && !complete) {
+        incomplete = true;
+        this.paintWaiters.unshift(...waiters);
+        // Preserve the original visible-time budget through layout retries.
+        if (passDeadline) {
+          // Handlers can have installed a deadline for their next-pass request.
+          (this.cancelNativeDeadline as (() => void) | undefined)?.();
+          this.cancelNativeDeadline = passDeadline;
+        }
+        this.nativeHealth = "pending";
+        this.pendingPaint = true;
+        this.scheduleLayoutPreparation();
+        return;
+      }
       if (!this.destroyed) {
         for (const waiter of waiters) waiter.resolve();
         this.finishNativePaint("healthy");
@@ -613,6 +633,7 @@ export class CanvasRuntime {
         throw paintError;
       }
     } finally {
+      if (!incomplete) passDeadline?.();
       this.activePaintWaiters = [];
       this.paintRequestFailures.clear();
       this.isPainting = false;
@@ -631,7 +652,7 @@ export class CanvasRuntime {
 
     this.nativePaintRequestedForWaiters = true;
     this.nativeHealth = "pending";
-    this.cancelNativeDeadline = visiblePaintDeadline(
+    this.cancelNativeDeadline ??= visiblePaintDeadline(
       this.canvas.ownerDocument,
       this.nativePaintTimeoutMs,
       () => {
@@ -650,7 +671,7 @@ export class CanvasRuntime {
       this.backend.requestPaint(this.canvas);
     } catch (error) {
       // Request failures can cross an application handler through invalidate().
-      if (this.isPainting) this.paintRequestFailures.add(error);
+      if (this.isPainting || this.isPreparingLayout) this.paintRequestFailures.add(error);
       this.cancelNativeDeadline();
       this.cancelNativeDeadline = undefined;
       this.nativePaintRequestedForWaiters = false;
@@ -662,10 +683,54 @@ export class CanvasRuntime {
 
   private invalidateSurfaceBounds(): void {
     if (this.isPainting) {
+      // Only a completed handler pass may schedule a layout retry.
       return;
     }
 
     this.invalidate();
+  }
+
+  private scheduleLayoutPreparation(): void {
+    if (this.layoutPreparationScheduled || this.destroyed) return;
+    this.layoutPreparationScheduled = true;
+    queueMicrotask(() => {
+      this.layoutPreparationScheduled = false;
+      if (this.destroyed) return;
+      this.paintRequestFailures.clear();
+      this.isPreparingLayout = true;
+      let preparationFailure: { error: unknown } | undefined;
+      try {
+        this.surfaces.prepareLayout();
+      } catch (error) {
+        preparationFailure = { error };
+      } finally {
+        this.isPreparingLayout = false;
+      }
+      const requestFailure = this.paintRequestFailures.values().next();
+      this.paintRequestFailures.clear();
+      // A layout callback may catch a request refusal, then return or throw another value.
+      // Its origin, rather than the error class, determines platform health.
+      if (!requestFailure.done || preparationFailure) {
+        const error = requestFailure.done ? preparationFailure!.error : requestFailure.value;
+        const waiting = this.paintWaiters.length > 0;
+        this.rejectPaintWaiters(error);
+        this.cancelNativeDeadline?.();
+        this.cancelNativeDeadline = undefined;
+        this.nativePaintRequestedForWaiters = false;
+        if (!requestFailure.done) {
+          this.nativeHealth = "failed";
+          if (error instanceof PrismNativeError) this.lastNativeError = error;
+        } else {
+          this.nativeHealth = "healthy";
+          if (!waiting) reportError(error);
+        }
+        return;
+      }
+      // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A layout write can synchronously destroy the runtime.
+      if (this.destroyed) return;
+      try { this.requestNativePaintForWaiters(); }
+      catch { /* The request owner already rejects waiters and records failure. */ }
+    });
   }
 
   private scheduleFallbackPaint(): void {
@@ -691,7 +756,7 @@ export class CanvasRuntime {
     }
   }
 
-  private rejectPaintWaiters(error: Error): void {
+  private rejectPaintWaiters(error: unknown): void {
     const waiters = this.paintWaiters;
     this.paintWaiters = [];
     for (const waiter of waiters) {
