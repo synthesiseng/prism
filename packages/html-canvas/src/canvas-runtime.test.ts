@@ -1,3 +1,4 @@
+import { PrismNativeError } from "./native-error";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { CanvasRuntime } from "./canvas-runtime";
 
@@ -81,9 +82,24 @@ class FakeStyle {
   pointerEvents = "";
   private readonly customProperties = new Map<string, string>();
 
-  setProperty(name: string, value: string): void {
-    this.customProperties.set(name, value);
+  private readonly priorities = new Map<string, string>();
+  setProperty(name: string, value: string, priority = ""): void {
+    const key = name.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
+    if (key in this) (this as unknown as Record<string, string>)[key] = value;
+    else this.customProperties.set(name, value);
+    this.priorities.set(name, priority);
   }
+  getPropertyValue(name: string): string {
+    const key = name.replace(/-([a-z])/g, (_match, letter: string) => letter.toUpperCase());
+    return (this as unknown as Record<string, string>)[key] ?? this.customProperties.get(name) ?? "";
+  }
+  getPropertyPriority(name: string): string { return this.priorities.get(name) ?? ""; }
+  removeProperty(name: string): string {
+    const previous = this.getPropertyValue(name);
+    this.setProperty(name, "");
+    return previous;
+  }
+
 }
 
 class FakeElement extends EventTarget {
@@ -359,6 +375,142 @@ describe("CanvasRuntime", () => {
 
   afterEach(() => {
     vi.unstubAllGlobals();
+  });
+
+  describe("application paint error reporting", () => {
+    it.each([
+      [false, false], [false, true], [true, false], [true, true]
+    ])("preserves native request failure origin: direct=%s waiting=%s", async (direct, waiting) => {
+      const report = vi.fn(); vi.stubGlobal("reportError", report);
+      const canvas = new FakeCanvas(true); canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const failure = new Error("Platform request refusal");
+      runtime.onPaint(({ invalidate }) => { if (direct) runtime.invalidate(); else invalidate(); });
+      const result = waiting ? runtime.paintOnce().catch((error: unknown) => error) : undefined;
+      if (!waiting) runtime.invalidate();
+      canvas.requestPaint = () => { throw failure; };
+      try {
+        emitPaint(canvas);
+        if (waiting) expect(await result).toBe(failure);
+        expect(runtime.diagnostics.health).toBe("failed");
+        expect(report).not.toHaveBeenCalled();
+      } finally { runtime.destroy(); }
+    });
+
+    it.each([false, true])("keeps app errors out of native health and reports only without waiters: waiting=%s", async (waiting) => {
+      const report = vi.fn(); vi.stubGlobal("reportError", report);
+      const canvas = new FakeCanvas(true); canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const error = new Error("app paint error");
+      runtime.onPaint(() => { throw error; });
+      const result = waiting ? runtime.paintOnce().catch((cause: unknown) => cause) : undefined;
+      try {
+        emitPaint(canvas);
+        if (waiting) { expect(await result).toBe(error); expect(report).not.toHaveBeenCalled(); }
+        else expect(report.mock.calls).toEqual([[error]]);
+        expect(runtime.diagnostics.health).toBe("healthy");
+        expect(runtime.diagnostics.lastError).toBeUndefined();
+      } finally { runtime.destroy(); }
+    });
+
+    it("does not classify an app-created native error as a platform failure", async () => {
+      const canvas = new FakeCanvas(true); canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const error = new PrismNativeError("draw-failed", "application-created");
+      runtime.onPaint(() => { throw error; });
+      const result = runtime.paintOnce().catch((cause: unknown) => cause);
+      try {
+        emitPaint(canvas); expect(await result).toBe(error);
+        expect(runtime.diagnostics.health).toBe("healthy");
+        expect(runtime.diagnostics.lastError).toBeUndefined();
+      } finally { runtime.destroy(); }
+    });
+
+    it("preserves non-Error thrown values and next-pass waiter separation", async () => {
+      const report = vi.fn(); vi.stubGlobal("reportError", report);
+      const canvas = new FakeCanvas(true); canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const error = { application: "sentinel" };
+      let later: Promise<unknown> | undefined; let calls = 0;
+      runtime.onPaint(() => {
+        if (++calls === 1) {
+          later = runtime.paintOnce().catch((cause: unknown) => cause);
+          // eslint-disable-next-line @typescript-eslint/only-throw-error -- Test JavaScript thrown-value identity.
+          throw error;
+        }
+      });
+      try {
+        emitPaint(canvas); expect(report.mock.calls).toEqual([[error]]);
+        expect(runtime.diagnostics.health).toBe("pending");
+        emitPaint(canvas); await later;
+        expect(runtime.diagnostics.health).toBe("healthy");
+      } finally { runtime.destroy(); }
+    });
+  });
+
+  describe("conditional DOM restoration", () => {
+    it("preserves app changes to managed attributes and the canvas content", () => {
+      const canvas = new FakeCanvas(true); canvas.ownerDocument = document;
+      const element = document.createElement("section");
+      element.setAttribute("aria-label", "original");
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 0, y: 0, width: 10, height: 10 }, ariaLabel: "Prism label"
+      });
+      element.setAttribute("aria-label", "app label");
+      element.setAttribute("data-prism-surface", "app marker");
+      element.setAttribute("drawable", "app drawable");
+      canvas.setAttribute("content", "app content");
+      surface.dispose(); runtime.destroy();
+      expect(element.getAttribute("aria-label")).toBe("app label");
+      expect(element.getAttribute("data-prism-surface")).toBe("app marker");
+      expect(element.getAttribute("drawable")).toBe("app drawable");
+      expect(canvas.getAttribute("content")).toBe("app content");
+    });
+
+    it.each([true, false])("restores each latest frame toggle when still owned: native=%s", (native) => {
+      const canvas = new FakeCanvas(native); canvas.ownerDocument = document;
+      const element = document.createElement("section");
+      element.style.pointerEvents = "initial"; element.inert = true;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+        bounds: { x: 0, y: 0, width: 10, height: 10 }
+      });
+      let draw = true;
+      runtime.onPaint(({ drawSurface }) => { if (draw) drawSurface(surface); });
+      const flush = () => native ? emitPaint(canvas) : (runtime as unknown as RuntimeInternals).flushPaint();
+      flush(); draw = false; flush(); draw = true; flush();
+      expect(element.style.pointerEvents).toBe("auto"); expect(element.inert).toBe(false);
+      runtime.destroy();
+      expect(element.style.pointerEvents).toBe("initial"); expect(element.inert).toBe(true);
+    });
+
+    it("preserves app changes after the latest inactive frame", () => {
+      const canvas = new FakeCanvas(true); canvas.ownerDocument = document;
+      const element = document.createElement("section"); element.inert = true;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 10, height: 10 } });
+      emitPaint(canvas);
+      element.style.pointerEvents = "visiblePainted"; element.inert = false;
+      runtime.destroy();
+      expect(element.style.pointerEvents).toBe("visiblePainted"); expect(element.inert).toBe(false);
+    });
+
+    it("restores fallback writes individually and leaves unrelated app styles", () => {
+      const canvas = new FakeCanvas(false); canvas.ownerDocument = document;
+      const element = document.createElement("section");
+      element.style.width = "14px"; element.style.height = "15px";
+      element.style.transform = "scale(2)";
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 10, height: 10 } });
+      runtime.onPaint(({ drawSurface }) => drawSurface(surface));
+      (runtime as unknown as RuntimeInternals).flushPaint();
+      element.style.width = "99px";
+      runtime.destroy();
+      expect(element.style.width).toBe("99px");
+      expect(element.style.height).toBe("15px");
+      expect(element.style.transform).toBe("scale(2)");
+    });
   });
 
   it.each(["visible", "hidden"] as const)(
@@ -1121,9 +1273,9 @@ describe("CanvasRuntime", () => {
       });
 
       await expect(runtime.paintOnce()).rejects.toThrow("paint failed");
-      expect(() => {
-        (runtime as unknown as RuntimeInternals).flushPaint();
-      }).toThrow("paint failed");
+      const report = vi.fn(); vi.stubGlobal("reportError", report);
+      (runtime as unknown as RuntimeInternals).flushPaint();
+      expect(report.mock.calls[0]?.[0]).toMatchObject({ message: "paint failed" });
 
       runtime.destroy();
     });
@@ -1453,11 +1605,11 @@ describe("CanvasRuntime", () => {
         drawSurface(surface);
       });
 
-      expect(() => {
-        (firstRuntime as unknown as RuntimeInternals).flushPaint();
-      }).toThrow(
-        "Prism CanvasRuntime can only use surfaces registered with this runtime."
-      );
+      const report = vi.fn(); vi.stubGlobal("reportError", report);
+      (firstRuntime as unknown as RuntimeInternals).flushPaint();
+      expect(report.mock.calls[0]?.[0]).toMatchObject({
+        message: "Prism CanvasRuntime can only use surfaces registered with this runtime."
+      });
 
       expect(surface.isDisposed).toBe(false);
       expect(element.parentElement).toBe(secondCanvas);

@@ -81,6 +81,8 @@ type PrismLifecycleFixture = Readonly<{
   testNoPaintLoopAfterDestroy(): Promise<PaintLoopResult>;
   testResizeBoundsCleanup(): Promise<ResizeCleanupResult>;
   testNativeLifecycle(): Promise<NativeLifecycleResult>;
+  testConditionalRestore(backend: "native" | "fallback", appChanges: boolean): Promise<Record<string, boolean>>;
+  testNativeHandlerErrors(waiter: boolean): Promise<Record<string, boolean>>;
 }>;
 
 type NativeCanvasContext = CanvasRenderingContext2D & {
@@ -111,7 +113,9 @@ window.prismLifecycleFixture = {
   testDestroyedRuntimeBehavior,
   testNoPaintLoopAfterDestroy,
   testResizeBoundsCleanup,
-  testNativeLifecycle
+  testNativeLifecycle,
+  testConditionalRestore,
+  testNativeHandlerErrors
 };
 
 async function runCreateDestroyCycles(cycles: number): Promise<LifecycleCycleResult[]> {
@@ -619,4 +623,104 @@ function observeDrawElementImage(
       return calls;
     }
   };
+}
+
+
+async function testConditionalRestore(
+  backend: "native" | "fallback",
+  appChanges: boolean
+): Promise<Record<string, boolean>> {
+  const root = createCycleRoot(100);
+  const canvas = createCanvas(100);
+  const element = document.createElement("div");
+  element.style.cssText = "position: relative; left: 7px; top: 8px; width: 90px; height: 40px; transform: scale(1); transform-origin: 3px 4px; pointer-events: none !important";
+  element.inert = true;
+  element.setAttribute("aria-label", "initial");
+  element.setAttribute("data-prism-surface", "initial-id");
+  element.setAttribute("drawable", "initial-drawable");
+  canvas.setAttribute("content", "drawable");
+  root.append(canvas, element);
+  const initialStyle = element.getAttribute("style");
+  const runtime = new CanvasRuntime(canvas, { backend });
+  try {
+    const surface = runtime.registerSurface(element, {
+      bounds: { x: 10, y: 10, width: 120, height: 60 }, ariaLabel: "runtime"
+    });
+    let draw = true;
+    runtime.onPaint(({ drawSurface }) => { if (draw) drawSurface(surface); });
+    await runtime.paintOnce();
+    draw = false;
+    await runtime.paintOnce();
+    const inactive = element.style.pointerEvents === "none" && element.inert;
+    draw = true;
+    await runtime.paintOnce();
+    const active = element.style.pointerEvents === "auto" && !element.inert;
+    if (appChanges) {
+      element.style.cssText = "position: fixed; left: 13px; top: 14px; width: 133px; height: 77px; transform: rotate(3deg); transform-origin: 9px 10px; pointer-events: auto !important; color: red";
+      element.inert = true;
+      element.setAttribute("aria-label", "app");
+      element.setAttribute("data-prism-surface", "app-id");
+      element.setAttribute("drawable", "app-drawable");
+      canvas.setAttribute("content", "app-content");
+    }
+    const appStyle = element.getAttribute("style");
+    runtime.destroy();
+    return {
+      inactive, active,
+      style: element.getAttribute("style") === (appChanges ? appStyle : initialStyle),
+      inert: element.inert,
+      aria: element.getAttribute("aria-label") === (appChanges ? "app" : "initial"),
+      id: element.getAttribute("data-prism-surface") === (appChanges ? "app-id" : "initial-id"),
+      drawable: element.getAttribute("drawable") === (appChanges ? "app-drawable" : "initial-drawable"),
+      content: canvas.getAttribute("content") === (appChanges ? "app-content" : "drawable"),
+      parent: element.parentElement === root
+    };
+  } finally {
+    runtime.destroy();
+    root.remove();
+  }
+}
+
+async function testNativeHandlerErrors(waiter: boolean): Promise<Record<string, boolean>> {
+  const root = createCycleRoot(101);
+  const canvas = createCanvas(101);
+  root.append(canvas);
+  const runtime = new CanvasRuntime(canvas, { backend: "native" });
+  const original = new Error("Expected application paint error");
+  const reports: unknown[] = [];
+  const onError = (event: ErrorEvent) => {
+    if (event.error === original) {
+      reports.push(event.error);
+      event.preventDefault();
+    }
+  };
+  window.addEventListener("error", onError);
+  let rejected: unknown;
+  let invoked = false;
+  runtime.onPaint(() => {
+    if (invoked) return;
+    invoked = true;
+    throw original;
+  });
+  try {
+    if (waiter) {
+      try { await runtime.paintOnce(); } catch (error) { rejected = error; }
+    } else {
+      runtime.invalidate();
+      await waitForCondition(() => invoked);
+    }
+    await animationFrames(2);
+    const diagnostics = runtime.diagnostics;
+    return {
+      invoked,
+      originalRejection: waiter ? rejected === original : rejected === undefined,
+      originalReport: waiter ? reports.length === 0 : reports.length === 1 && reports[0] === original,
+      healthy: diagnostics.health === "healthy",
+      noPlatformError: diagnostics.lastError === undefined
+    };
+  } finally {
+    window.removeEventListener("error", onError);
+    runtime.destroy();
+    root.remove();
+  }
 }
