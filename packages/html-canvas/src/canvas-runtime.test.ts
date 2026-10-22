@@ -380,6 +380,39 @@ describe("CanvasRuntime", () => {
   describe("application paint error reporting", () => {
     it.each([
       [false, false], [false, true], [true, false], [true, true]
+    ])("preserves request failure after a different app throw: direct=%s waiting=%s", async (direct, waiting) => {
+      const report = vi.fn();
+      vi.stubGlobal("reportError", report);
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement);
+      const failure = new PrismNativeError("draw-failed", "Platform request refusal");
+      const appFailure = new Error("different application failure");
+      runtime.onPaint(({ invalidate }) => {
+        try {
+          if (direct) runtime.invalidate();
+          else invalidate();
+        } catch (error) {
+          expect(error).toBe(failure);
+          throw appFailure;
+        }
+      });
+      const result = waiting ? runtime.paintOnce().catch((error: unknown) => error) : undefined;
+      if (!waiting) runtime.invalidate();
+      canvas.requestPaint = () => { throw failure; };
+      try {
+        emitPaint(canvas);
+        if (waiting) expect(await result).toBe(failure);
+        expect(runtime.diagnostics.health).toBe("failed");
+        expect(runtime.diagnostics.lastError).toBe(failure);
+        expect(report).not.toHaveBeenCalled();
+      } finally {
+        runtime.destroy();
+      }
+    });
+
+    it.each([
+      [false, false], [false, true], [true, false], [true, true]
     ])("preserves native request failure origin: direct=%s waiting=%s", async (direct, waiting) => {
       const report = vi.fn(); vi.stubGlobal("reportError", report);
       const canvas = new FakeCanvas(true); canvas.ownerDocument = document;
@@ -1872,6 +1905,46 @@ describe("CanvasRuntime", () => {
         runtime.destroy();
       }
     });
+    it.each([false, true])("attempts placement after tracked restoration fails: placementFails=%s", (placementFails) => {
+      const first = makeRuntime(document), second = makeRuntime(document);
+      const parent = document.createElement("main");
+      const element = document.createElement("section");
+      const sibling = document.createElement("aside");
+      parent.appendChild(element);
+      parent.appendChild(sibling);
+      const surface = first.runtime.registerSurface(element as unknown as HTMLElement, { bounds });
+      const writeFailure = new Error("tracked attribute restore refused");
+      const placementFailure = new Error("placement restore refused");
+      const remove = element.removeAttribute.bind(element);
+      const restore = parent.insertBefore.bind(parent);
+      const removeSpy = vi.spyOn(element, "removeAttribute").mockImplementation((name) => {
+        if (name === "data-prism-surface") throw writeFailure;
+        remove(name);
+      });
+      const placementSpy = vi.spyOn(parent, "insertBefore").mockImplementation((el, before) => {
+        if (placementFails) throw placementFailure;
+        return restore(el, before);
+      });
+      try {
+        let thrown: unknown;
+        try { surface.dispose(); } catch (error) { thrown = error; }
+        expect(thrown).toBe(writeFailure);
+        expect(placementSpy).toHaveBeenCalledTimes(1);
+        expect(surface.isDisposed).toBe(true);
+        if (!placementFails) expect(parent.children).toEqual([element, sibling]);
+        else expect(element.parentElement).toBe(first.canvas);
+      } finally {
+        removeSpy.mockRestore();
+        placementSpy.mockRestore();
+        first.runtime.destroy();
+      }
+      try {
+        expect(() => second.runtime.registerSurface(element as unknown as HTMLElement, { bounds })).not.toThrow();
+      } finally {
+        second.runtime.destroy();
+      }
+    });
+
     it("releases every owner when one DOM restoration throws during destroy", () => {
       const first = makeRuntime(document),
         second = makeRuntime(document);

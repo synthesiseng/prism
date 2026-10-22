@@ -586,7 +586,8 @@ export class CanvasRuntime {
         this.lastNativeError = undefined;
       }
     } catch (error) {
-      if (error instanceof PaintHandlerError && !this.paintRequestFailures.has(error.error)) {
+      const requestFailure = this.paintRequestFailures.values().next();
+      if (error instanceof PaintHandlerError && requestFailure.done) {
         for (const waiter of waiters) waiter.reject(error.error);
         // The native paint arrived; an application bug is not a platform failure.
         if (!this.destroyed) {
@@ -596,7 +597,13 @@ export class CanvasRuntime {
         if (waiters.length === 0) reportError(error.error);
         return;
       }
-      const paintError = toError(error instanceof PaintHandlerError ? error.error : error);
+      // A handler can catch a request failure and then throw a different value.
+      // Keep the actual platform failure authoritative for this paint pass.
+      const paintError = toError(
+        requestFailure.done
+          ? error instanceof PaintHandlerError ? error.error : error
+          : requestFailure.value
+      );
       for (const waiter of waiters) {
         waiter.reject(paintError);
       }

@@ -145,18 +145,30 @@ function snapshotSurfaceDomState(element: HTMLElement): SurfaceDomState {
 }
 
 function restoreSurfaceDomState(element: HTMLElement, state: SurfaceDomState): void {
-  state.writes.restore();
-
-  if (state.parent) {
-    const restoreBefore =
-      state.placeholder?.parentNode === state.parent
-        ? state.placeholder
-        : state.nextSibling?.parentNode === state.parent
-          ? state.nextSibling
-          : null;
-    state.parent.insertBefore(element, restoreBefore);
-    state.placeholder?.remove();
-  } else {
-    element.remove();
+  let writeFailed = false;
+  let writeFailure: unknown;
+  try {
+    state.writes.restore();
+  } catch (error) {
+    writeFailed = true;
+    writeFailure = error;
   }
+
+  try {
+    if (state.parent) {
+      const restoreBefore =
+        state.placeholder?.parentNode === state.parent
+          ? state.placeholder
+          : state.nextSibling?.parentNode === state.parent
+            ? state.nextSibling
+            : null;
+      state.parent.insertBefore(element, restoreBefore);
+      state.placeholder?.remove();
+    } else {
+      element.remove();
+    }
+  } catch (error) {
+    if (!writeFailed) throw error;
+  }
+  if (writeFailed) throw writeFailure;
 }
