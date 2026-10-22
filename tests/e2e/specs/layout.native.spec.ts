@@ -15,6 +15,7 @@ for (const scenario of [
       expect(first.naturalWidth).toBeGreaterThan(420);
       let previous = first;
       for (const width of [120, 420, 280, first.naturalWidth + 100, 120.123456789]) {
+        if (width === 280) expect((await page.evaluate(() => window.prismLayoutFixture.measure())).focused).toBe(true);
         const result = width === 120 ? first : await page.evaluate(
           ({ width, duringPaint }) => window.prismLayoutFixture.resize(width, duringPaint),
           { width, duringPaint: width === 280 }
@@ -44,6 +45,11 @@ for (const scenario of [
           expect(result.lines).toBeGreaterThan(previous.lines);
           expect(result.lines).toBeLessThan(first.lines);
           expect(result.insideWidth).toBe(420);
+          expect(result.focused).toBe(true);
+          expect(result.firstPaint?.pass).toBe(result.beforePass + 1);
+          expect(result.firstPaint?.inert).toBe(false);
+          expect(result.firstPaint?.pointerEvents).toBe("auto");
+          expect(result.firstPaint?.focused).toBe(true);
         }
         const clicks = (await page.evaluate(() => window.prismLayoutFixture.measure())).clicks;
         await page.mouse.click(result.clickPoint.x, result.clickPoint.y);

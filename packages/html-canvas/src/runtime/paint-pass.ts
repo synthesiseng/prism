@@ -15,8 +15,9 @@ import type { SurfaceRegistry } from "./surface-registry";
  * @remarks
  * Paint handlers receive the native 2D canvas context and must call
  * `drawSurface()` for each registered HTML surface that should be active in the
- * current frame. Registered surfaces that are not drawn are deactivated for
- * pointer and focus handling.
+ * current frame. Omitted surfaces are deactivated for pointer and focus handling.
+ * Layout-deferred surfaces retain their prior interaction state until the retry
+ * completes or fails.
  *
  * @param api - Paint context and surface drawing controls.
  */
@@ -49,6 +50,7 @@ export function flushPaintPass(options: PaintPassOptions): boolean {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const native = backend.usesNativePaintEvent;
   const drawn = new Set<CanvasSurface>();
+  const deferred = new Set<CanvasSurface>();
   if (!native) surfaces.forEachSurface(deactivateSurface);
 
   let complete = true;
@@ -60,6 +62,7 @@ export function flushPaintPass(options: PaintPassOptions): boolean {
     surfaces.assertRegistered(surface);
     if (!surfaces.layoutReady(surface, cssBounds)) {
       complete = false;
+      deferred.add(surface);
       return;
     }
     const pixelBounds = cssRectToCanvasPixels(canvas, metrics, cssBounds);
@@ -77,6 +80,8 @@ export function flushPaintPass(options: PaintPassOptions): boolean {
       throw error;
     }
     surfaces.assertRegistered(surface);
+    // This source now belongs to the completed draw, not the deferred retry.
+    surfaces.setLayoutDeferred(surface, false);
     activateSurface(surface);
     drawn.add(surface);
   };
@@ -98,7 +103,9 @@ export function flushPaintPass(options: PaintPassOptions): boolean {
       // Keep stable active sources unchanged: toggling inert before application
       // layout reads can invalidate the next native snapshot indefinitely.
       surfaces.forEachSurface((surface) => {
-        if (drawn.has(surface)) return;
+        const retainDeferred = !failure && deferred.has(surface) && !drawn.has(surface);
+        surfaces.setLayoutDeferred(surface, retainDeferred);
+        if (drawn.has(surface) || retainDeferred) return;
         try { deactivateSurface(surface); }
         catch (error) { failure ??= { error }; }
       });

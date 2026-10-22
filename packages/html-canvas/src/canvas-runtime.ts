@@ -606,6 +606,7 @@ export class CanvasRuntime {
         this.lastNativeError = undefined;
       }
     } catch (error) {
+      this.deactivateDeferredSurfaces();
       const requestFailure = this.paintRequestFailures.values().next();
       if (error instanceof PaintHandlerError && requestFailure.done) {
         for (const waiter of waiters) waiter.reject(error.error);
@@ -713,7 +714,6 @@ export class CanvasRuntime {
       if (!requestFailure.done || preparationFailure) {
         const error = requestFailure.done ? preparationFailure!.error : requestFailure.value;
         const waiting = this.paintWaiters.length > 0;
-        this.rejectPaintWaiters(error);
         this.cancelNativeDeadline?.();
         this.cancelNativeDeadline = undefined;
         this.nativePaintRequestedForWaiters = false;
@@ -722,8 +722,10 @@ export class CanvasRuntime {
           if (error instanceof PrismNativeError) this.lastNativeError = error;
         } else {
           this.nativeHealth = "healthy";
-          if (!waiting) reportError(error);
         }
+        // Finalize the failed attempt before cleanup callbacks can request a new pass.
+        this.rejectPaintWaiters(error);
+        if (requestFailure.done && !waiting) reportError(error);
         return;
       }
       // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- A layout write can synchronously destroy the runtime.
@@ -756,12 +758,19 @@ export class CanvasRuntime {
     }
   }
 
+  private deactivateDeferredSurfaces(): void {
+    if (this.destroyed || this.isPreparingLayout) return;
+    try { this.surfaces.deactivateDeferred(); }
+    catch { /* Every deferred owner was attempted; preserve the original paint failure. */ }
+  }
+
   private rejectPaintWaiters(error: unknown): void {
     const waiters = this.paintWaiters;
     this.paintWaiters = [];
     for (const waiter of waiters) {
       waiter.reject(error);
     }
+    this.deactivateDeferredSurfaces();
   }
 
   private assertNotDestroyed(operation: string): void {

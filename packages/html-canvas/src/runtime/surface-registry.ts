@@ -23,6 +23,7 @@ const elementOwners = new WeakMap<HTMLElement, SurfaceRegistry>();
 // Internal owner of registered surfaces and DOM round-trip restoration.
 export class SurfaceRegistry {
   private readonly records: SurfaceRecord[] = [];
+  private readonly layoutDeferred = new Set<CanvasSurface>();
   private closed = false;
   private preparingLayout = false;
 
@@ -132,11 +133,29 @@ export class SurfaceRegistry {
     }
   }
 
+  setLayoutDeferred(surface: CanvasSurface, deferred: boolean): void {
+    if (deferred) this.layoutDeferred.add(surface);
+    else this.layoutDeferred.delete(surface);
+  }
+
+  deactivateDeferred(): void {
+    const deferred = [...this.layoutDeferred];
+    this.layoutDeferred.clear();
+    let failure: { error: unknown } | undefined;
+    for (const surface of deferred) {
+      if (surface.isDisposed) continue;
+      try { deactivateSurface(surface); }
+      catch (error) { failure ??= { error }; }
+    }
+    if (failure) throw failure.error;
+  }
+
   private assertOpen(): void {
     if (this.closed) throw new Error("Cannot register a surface with a destroyed Prism runtime.");
   }
 
   unregister(surface: CanvasSurface): void {
+    this.layoutDeferred.delete(surface);
     const index = this.records.findIndex((record) => record.surface === surface);
     if (index === -1) return;
     const [record] = this.records.splice(index, 1);

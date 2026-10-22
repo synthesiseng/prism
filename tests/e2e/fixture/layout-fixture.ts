@@ -69,6 +69,12 @@ function create(options: { dynamic: boolean; scale: number; transform: boolean }
     }
     drawSurface(surface);
   });
+  let capturePaintState = false;
+  const paintStates: { pass: number; inert: boolean; pointerEvents: string; focused: boolean }[] = [];
+  canvas.addEventListener("paint", () => {
+    if (capturePaintState) paintStates.push({ pass: passes, inert: element.inert,
+      pointerEvents: element.style.pointerEvents, focused: document.activeElement === button });
+  });
   const measure = () => {
     const range = document.createRange(); range.selectNodeContents(text);
     const lines = new Set(Array.from(range.getClientRects(), rect => Math.round(rect.top))).size;
@@ -79,16 +85,16 @@ function create(options: { dynamic: boolean; scale: number; transform: boolean }
       pixels: pixels(), bitmapRatio: canvas.width / 600, devicePixelRatio,
       expectedPixelBox: { x: bounds.x + 12 + dx, y: bounds.y + 8 + dy, width: 40, height: 20 },
       clickPoint: { x: rect.left + (bounds.x + 32 + dx) * rect.width / 600, y: rect.top + (bounds.y + 18 + dy) * rect.height / 350 },
-      clicks, transformPreserved: element.style.transform === transform, passes, insideWidth, naturalWidth
+      clicks, focused: document.activeElement === button, transformPreserved: element.style.transform === transform, passes, insideWidth, naturalWidth
     };
   };
   return {
     async paint() {
-      const before = draws.length, beforePass = passes;
-      captureFirstDraw = true;
+      const before = draws.length, beforePass = passes, beforeState = paintStates.length;
+      captureFirstDraw = true; capturePaintState = true;
       try { await runtime.paintOnce(); }
-      finally { captureFirstDraw = false; }
-      return { ...measure(), firstDraw: draws[before], beforePass };
+      finally { captureFirstDraw = false; capturePaintState = false; }
+      return { ...measure(), firstDraw: draws[before], firstPaint: paintStates[beforeState], beforePass };
     },
     async resize(width: number, duringPaint: boolean) {
       const next = { ...bounds, width, height: Math.max(element.offsetHeight, 180) };

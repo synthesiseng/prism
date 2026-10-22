@@ -5,7 +5,7 @@
 ### Changed
 
 - Native surface bounds set source layout width and height before the browser snapshot. A size change discovered during paint defers drawing and `paintOnce()` settlement until a fresh snapshot; paint handlers may run again.
-- Stable native surfaces retain their interaction state across paints, avoiding repaint feedback when handlers measure layout. Undrawn surfaces are deactivated at the end of the pass, including failure cleanup.
+- Stable native surfaces retain their interaction state across paints, avoiding repaint feedback when handlers measure layout. Omitted surfaces are deactivated at the end of the pass, including failure cleanup. Layout-deferred surfaces retain their prior interaction state until the retry completes or fails.
 - **Breaking:** registering an element that already belongs to an active surface throws, including duplicate registration within the same runtime. Dispose or unregister the existing surface before registering it again.
 
 ### Deferred — open findings
