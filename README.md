@@ -198,7 +198,17 @@ Returned by `registerSurface()`. Do not construct directly.
 ## Native lifecycle
 
 The current native path uses canvas `content="drawable"` and surface `drawable`.
-Prism supplies drawing bounds; the browser synchronizes native input geometry.
+Surface bounds set the native source's CSS width and height as well as its drawing
+rectangle. The browser synchronizes native input geometry; application CSS
+transforms are preserved.
+
+Prism applies layout sizing before the browser snapshot. A size change made inside
+`onPaint()` defers drawing until a subsequent paint has the new layout; `paintOnce()`
+remains pending until that pass completes. Function-based bounds are still evaluated
+when `drawSurface()` is called, so their first attempted paint can also be deferred.
+Retries share the original visible-time timeout budget. Keep paint handlers
+repeatable: a deferred pass can invoke them again, and drawing already performed
+in an incomplete pass is not rolled back.
 Application CSS transforms are preserved. Prism never compensates for a browser
 hit-testing failure by rewriting transforms or pointer coordinates.
 

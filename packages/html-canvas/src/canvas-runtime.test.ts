@@ -377,6 +377,585 @@ describe("CanvasRuntime", () => {
     vi.unstubAllGlobals();
   });
 
+  describe("native layout preparation", () => {
+    function create(timeout = 100) {
+      const canvas = new FakeCanvas(true);
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement, { nativePaintTimeoutMs: timeout });
+      const element = document.createElement("section");
+      return { canvas, runtime, element };
+    }
+
+    it.each([
+      [false, "propagate"], [true, "propagate"],
+      [false, "different"], [true, "different"],
+      [false, "caught"], [true, "caught"]
+    ] as const)("preserves preparation request failure: waiting=%s callback=%s", async (waiting, outcome) => {
+      const { canvas, runtime, element } = create();
+      const failure = new PrismNativeError("draw-failed", "native request refused during sizing");
+      const appFailure = new Error("different app failure");
+      const report = vi.fn(); vi.stubGlobal("reportError", report);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: () => ({ x: 0, y: 0, width: 120, height: 80 }) });
+      runtime.onPaint(({ drawSurface }) => drawSurface(surface));
+      const result = waiting ? runtime.paintOnce().catch((error: unknown) => error) : undefined;
+      const write = element.style.setProperty.bind(element.style);
+      const spy = vi.spyOn(element.style, "setProperty").mockImplementation((name, value, priority) => {
+        write(name, value, priority);
+        if (name !== "width") return;
+        try { runtime.invalidate(); }
+        catch (error) {
+          expect(error).toBe(failure);
+          if (outcome === "propagate") throw error;
+          if (outcome === "different") throw appFailure;
+        }
+      });
+      const request = vi.fn(() => { throw failure; });
+      canvas.requestPaint = request;
+      try {
+        emitPaint(canvas); await Promise.resolve();
+        if (waiting) expect(await result).toBe(failure);
+        expect(runtime.diagnostics.health).toBe("failed");
+        expect(runtime.diagnostics.lastError).toBe(failure);
+        expect(report).not.toHaveBeenCalled();
+        expect(request).toHaveBeenCalledTimes(1);
+        expect(document.visibilityListeners.size).toBe(0);
+      } finally { spy.mockRestore(); runtime.destroy(); }
+    });
+
+    it("keeps stable native interactivity without rewriting it during measured paint", async () => {
+      const { canvas, runtime, element } = create();
+      const bounds = { x: 0, y: 0, width: 280, height: 180 };
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds });
+      runtime.onPaint(({ drawSurface }) => { surface.setBounds(bounds); drawSurface(surface); });
+      const first = runtime.paintOnce(); emitPaint(canvas); await first;
+      const styles = vi.spyOn(element.style, "setProperty");
+      let inert = element.inert;
+      const inertWrite = vi.fn((value: boolean) => { inert = value; });
+      Object.defineProperty(element, "inert", { configurable: true, get: () => inert, set: inertWrite });
+      try {
+        const next = runtime.paintOnce(); emitPaint(canvas); await next;
+        expect(styles).not.toHaveBeenCalled();
+        expect(inertWrite).not.toHaveBeenCalled();
+        expect(element.style.pointerEvents).toBe("auto");
+        expect(element.inert).toBe(false);
+      } finally { styles.mockRestore(); runtime.destroy(); }
+    });
+
+    it("deactivates undrawn native surfaces after handler failure and preserves the first error", async () => {
+      const { canvas, runtime, element } = create();
+      const second = document.createElement("aside");
+      const bounds = { x: 0, y: 0, width: 120, height: 80 };
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds });
+      const other = runtime.registerSurface(second as unknown as HTMLElement, { bounds });
+      const appFailure = new Error("application failure before drawing");
+      const cleanupFailure = new Error("first surface cleanup failure");
+      let fail = false;
+      runtime.onPaint(({ drawSurface }) => {
+        if (fail) throw appFailure;
+        drawSurface(surface); drawSurface(other);
+      });
+      const first = runtime.paintOnce(); emitPaint(canvas); await first;
+      const write = element.style.setProperty.bind(element.style);
+      const spy = vi.spyOn(element.style, "setProperty").mockImplementation((name, value, priority) => {
+        write(name, value, priority);
+        if (name === "pointer-events" && value === "none") throw cleanupFailure;
+      });
+      try {
+        fail = true;
+        const result = runtime.paintOnce().catch((error: unknown) => error);
+        emitPaint(canvas);
+        expect(await result).toBe(appFailure);
+        expect(element.inert).toBe(true);
+        expect(second.style.pointerEvents).toBe("none");
+        expect(second.inert).toBe(true);
+      } finally { spy.mockRestore(); runtime.destroy(); }
+    });
+
+    it.each([false, true])("attempts same-source inert cleanup and preserves pointer failure (inert throws=%s)", async (inertThrows) => {
+      const { canvas, runtime, element } = create();
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 120, height: 80 } });
+      let draw = true;
+      runtime.onPaint(({ drawSurface }) => { if (draw) drawSurface(surface); });
+      const first = runtime.paintOnce(); emitPaint(canvas); await first;
+      const pointerFailure = new Error("pointer cleanup refused");
+      let inert = element.inert;
+      const inertWrite = vi.fn((value: boolean) => { inert = value; if (inertThrows) throw new Error("inert cleanup refused"); });
+      Object.defineProperty(element, "inert", { configurable: true, get: () => inert, set: inertWrite });
+      const spy = vi.spyOn(element.style, "setProperty").mockImplementation(() => { throw pointerFailure; });
+      try {
+        draw = false;
+        const result = runtime.paintOnce().catch((error: unknown) => error);
+        emitPaint(canvas);
+        expect(await result).toBe(pointerFailure);
+        expect(inertWrite).toHaveBeenCalledTimes(1);
+        expect(inertWrite).toHaveBeenCalledWith(true);
+        expect(element.inert).toBe(true);
+      } finally {
+        spy.mockRestore();
+        Object.defineProperty(element, "inert", { configurable: true, writable: true, value: inert });
+        runtime.destroy();
+      }
+    });
+
+    it("sets literal layout before drawing and restores only unchanged dimensions", async () => {
+      const { canvas, runtime, element } = create();
+      element.style.width = "50px";
+      element.style.transform = "rotate(3deg)";
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 280, height: 80 } });
+      try {
+        expect(element.style.width).toBe("280px");
+        expect(element.style.height).toBe("80px");
+        runtime.onPaint(({ drawSurface }) => drawSurface(surface));
+        const painted = runtime.paintOnce();
+        emitPaint(canvas);
+        await painted;
+        surface.setBounds({ x: 10, y: 20, width: 420, height: 100 });
+        expect(element.style.width).toBe("420px");
+        expect(element.style.height).toBe("100px");
+        expect(element.style.transform).toBe("rotate(3deg)");
+        element.style.width = "777px";
+      } finally { runtime.destroy(); }
+      expect(element.style.width).toBe("777px");
+      expect(element.style.height).toBe("");
+      expect(element.style.transform).toBe("rotate(3deg)");
+    });
+
+    it("defers changed layout during paint without stale draw or early resolution", async () => {
+      const { canvas, runtime, element } = create();
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 120, height: 80 } });
+      let insideWidth = "", settled = false;
+      runtime.onPaint(({ drawSurface }) => {
+        surface.setBounds({ x: 10, y: 20, width: 420, height: 100 });
+        insideWidth = element.style.width;
+        drawSurface(surface);
+      });
+      const painted = runtime.paintOnce().then(() => { settled = true; });
+      try {
+        emitPaint(canvas);
+        expect(insideWidth).toBe("120px");
+        expect(canvas.context.drawElementImageCalls).toHaveLength(0);
+        await Promise.resolve();
+        expect(settled).toBe(false);
+        expect(element.style.width).toBe("420px");
+        emitPaint(canvas);
+        await painted;
+        expect(settled).toBe(true);
+        expect(canvas.context.drawElementImageCalls).toHaveLength(1);
+      } finally { runtime.destroy(); }
+    });
+
+
+    it("successful retry draw releases deferred cleanup ownership before request failure",async()=>{
+      const {canvas,runtime,element}=create();const bounds={x:0,y:0,width:120,height:80};
+      const surface=runtime.registerSurface(element as unknown as HTMLElement,{bounds});
+      const failure=new Error("next request failed after successful redraw");let phase=0;
+      runtime.onPaint(({drawSurface,invalidate})=>{
+        if(phase===1)surface.setBounds({...bounds,width:420});
+        drawSurface(surface);
+        if(phase===2)invalidate();
+      });
+      try{
+        const first=runtime.paintOnce();emitPaint(canvas);await first;
+        phase=1;const result=runtime.paintOnce().catch((error:unknown)=>error);emitPaint(canvas);await Promise.resolve();
+        phase=2;canvas.requestPaint=()=>{throw failure;};emitPaint(canvas);
+        expect(await result).toBe(failure);
+        expect(element.inert,"successfully redrawn source is no longer retained-deferred").toBe(false);
+        expect(element.style.pointerEvents).toBe("auto");
+      }finally{runtime.destroy();}
+    });
+    it.each(["layout", "request"] as const)("preparation %s failure cleanup preserves fresh reentrant paint deadline",async(source)=>{
+      vi.useFakeTimers({toFake:["setTimeout","clearTimeout","performance"]});
+      const {canvas,runtime,element}=create();const bounds={x:0,y:0,width:120,height:80};
+      const surface=runtime.registerSurface(element as unknown as HTMLElement,{bounds});
+      const failure=new Error("prepare failure");let resizing=false;let failPreparation=true;
+      let nextResult:Promise<unknown>|undefined;let nextSettled=false;
+      runtime.onPaint(({drawSurface})=>{if(resizing)surface.setBounds({...bounds,width:420});drawSurface(surface);});
+      const first=runtime.paintOnce();emitPaint(canvas);await first;
+      const write=element.style.setProperty.bind(element.style);
+      const spy=vi.spyOn(element.style,"setProperty").mockImplementation((name,value,priority)=>{
+        if(resizing&&name==="width"&&failPreparation){
+          failPreparation=false;
+          if (source === "request") {
+            const request = canvas.requestPaint;
+            canvas.requestPaint = () => { throw failure; };
+            try { runtime.invalidate(); } finally { canvas.requestPaint = request; }
+          }
+          throw failure;
+        }
+        write(name,value,priority);
+        if(resizing&&name==="pointer-events"&&value==="none"&&!nextResult){
+          nextResult=runtime.paintOnce().then(()=>{nextSettled=true;return "resolved";},(error:unknown)=>{nextSettled=true;return error;});
+        }
+      });
+      try{
+        resizing=true;const result=runtime.paintOnce().catch((error:unknown)=>error);emitPaint(canvas);await Promise.resolve();
+        expect(await result).toBe(failure);expect(nextResult).toBeDefined();
+        await vi.advanceTimersByTimeAsync(101);
+        expect(nextSettled,"new request must retain its own visible-time deadline").toBe(true);
+        expect(await nextResult).toMatchObject({code:"paint-timeout"});
+      }finally{spy.mockRestore();runtime.destroy();await nextResult;vi.useRealTimers();}
+    });
+
+    it("keeps active layout-deferred surfaces interactive but deactivates omitted surfaces", async () => {
+      const { canvas, runtime, element } = create();
+      const otherElement = document.createElement("aside");
+      const bounds = { x: 0, y: 0, width: 120, height: 80 };
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds });
+      const other = runtime.registerSurface(otherElement as unknown as HTMLElement, { bounds });
+      let resizing = false, omit = false;
+      runtime.onPaint(({ drawSurface }) => {
+        if (resizing) surface.setBounds({ ...bounds, width: 420 });
+        if (!omit) drawSurface(surface);
+        if (!resizing) drawSurface(other);
+      });
+      try {
+        const first = runtime.paintOnce(); emitPaint(canvas); await first;
+        expect(element.inert).toBe(false);
+        expect(otherElement.inert).toBe(false);
+        resizing = true;
+        let settled = false;
+        const resized = runtime.paintOnce().then(() => { settled = true; });
+        void resized.catch(() => undefined);
+        emitPaint(canvas);
+        expect(element.style.pointerEvents).toBe("auto");
+        expect(element.inert).toBe(false);
+        expect(otherElement.style.pointerEvents).toBe("none");
+        expect(otherElement.inert).toBe(true);
+        await Promise.resolve();
+        expect(settled).toBe(false);
+        emitPaint(canvas); await resized;
+        expect(element.inert).toBe(false);
+        omit = true;
+        const omitted = runtime.paintOnce(); emitPaint(canvas); await omitted;
+        expect(element.inert).toBe(true);
+        expect(element.style.pointerEvents).toBe("none");
+      } finally { runtime.destroy(); }
+    });
+
+    it.each(["handler", "prepare", "request", "timeout"] as const)("deactivates layout-deferred surfaces when %s fails", async (phase) => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+      const { canvas, runtime, element } = create();
+      const bounds = { x: 0, y: 0, width: 120, height: 80 };
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds });
+      const failure = new Error(`${phase} failure`);
+      let resizing = false;
+      runtime.onPaint(({ drawSurface }) => {
+        if (resizing) surface.setBounds({ ...bounds, width: 420 });
+        drawSurface(surface);
+        if (resizing && phase === "handler") throw failure;
+      });
+      const first = runtime.paintOnce(); emitPaint(canvas); await first;
+      const write = element.style.setProperty.bind(element.style);
+      const spy = vi.spyOn(element.style, "setProperty").mockImplementation((name, value, priority) => {
+        if (resizing && phase === "prepare" && name === "width") throw failure;
+        write(name, value, priority);
+      });
+      try {
+        resizing = true;
+        const result = runtime.paintOnce().catch((error: unknown) => error);
+        if (phase === "request") canvas.requestPaint = () => { throw failure; };
+        emitPaint(canvas); await Promise.resolve();
+        if (phase === "timeout") await vi.advanceTimersByTimeAsync(101);
+        const error: unknown = await result;
+        if (phase === "timeout") expect(error).toMatchObject({ code: "paint-timeout" });
+        else expect(error).toBe(failure);
+        expect(element.style.pointerEvents).toBe("none");
+        expect(element.inert).toBe(true);
+      } finally { spy.mockRestore(); runtime.destroy(); vi.useRealTimers(); }
+    });
+
+    it("preserves application changes when destroying a retained layout-deferred surface", async () => {
+      const { canvas, runtime, element } = create();
+      const bounds = { x: 0, y: 0, width: 120, height: 80 };
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds });
+      let resizing = false;
+      runtime.onPaint(({ drawSurface }) => {
+        if (resizing) surface.setBounds({ ...bounds, width: 420 });
+        drawSurface(surface);
+      });
+      const first = runtime.paintOnce(); emitPaint(canvas); await first;
+      resizing = true;
+      const result = runtime.paintOnce().catch((error: unknown) => error);
+      emitPaint(canvas);
+      element.style.pointerEvents = "visiblePainted";
+      element.inert = true;
+      runtime.destroy(); await result; await Promise.resolve();
+      expect(element.style.pointerEvents).toBe("visiblePainted");
+      expect(element.inert).toBe(true);
+    });
+
+    it("does not deactivate a transferred surface when the old deferred deadline expires", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+      const { canvas, runtime, element } = create();
+      const next = create();
+      const bounds = { x: 0, y: 0, width: 120, height: 80 };
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds });
+      let resizing = false;
+      runtime.onPaint(({ drawSurface }) => {
+        if (resizing) surface.setBounds({ ...bounds, width: 420 });
+        drawSurface(surface);
+      });
+      const first = runtime.paintOnce(); emitPaint(canvas); await first;
+      try {
+        resizing = true;
+        const result = runtime.paintOnce().catch((error: unknown) => error);
+        emitPaint(canvas);
+        surface.dispose();
+        next.runtime.registerSurface(element as unknown as HTMLElement, { bounds });
+        element.style.pointerEvents = "visiblePainted";
+        element.inert = false;
+        await Promise.resolve(); await vi.advanceTimersByTimeAsync(101);
+        expect(await result).toMatchObject({ code: "paint-timeout" });
+        expect(element.parentElement).toBe(next.canvas);
+        expect(element.style.pointerEvents).toBe("visiblePainted");
+        expect(element.inert).toBe(false);
+      } finally { runtime.destroy(); next.runtime.destroy(); vi.useRealTimers(); }
+    });
+
+    it("attempts every retained deferred cleanup and preserves the deadline error", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+      const { canvas, runtime, element } = create();
+      const second = document.createElement("aside");
+      const bounds = { x: 0, y: 0, width: 120, height: 80 };
+      const one = runtime.registerSurface(element as unknown as HTMLElement, { bounds });
+      const two = runtime.registerSurface(second as unknown as HTMLElement, { bounds });
+      let resizing = false;
+      runtime.onPaint(({ drawSurface }) => {
+        if (resizing) { one.setBounds({ ...bounds, width: 420 }); two.setBounds({ ...bounds, width: 420 }); }
+        drawSurface(one); drawSurface(two);
+      });
+      const first = runtime.paintOnce(); emitPaint(canvas); await first;
+      const write = element.style.setProperty.bind(element.style);
+      const spy = vi.spyOn(element.style, "setProperty").mockImplementation((name, value, priority) => {
+        if (name === "pointer-events" && value === "none") throw new Error("cleanup refused");
+        write(name, value, priority);
+      });
+      try {
+        resizing = true;
+        const result = runtime.paintOnce().catch((error: unknown) => error);
+        emitPaint(canvas); await Promise.resolve(); await vi.advanceTimersByTimeAsync(101);
+        expect(await result).toMatchObject({ code: "paint-timeout" });
+        expect(element.inert).toBe(true);
+        expect(second.style.pointerEvents).toBe("none");
+        expect(second.inert).toBe(true);
+      } finally { spy.mockRestore(); runtime.destroy(); vi.useRealTimers(); }
+    });
+
+    it("keeps provider calls in drawSurface and prepares before its first successful draw", async () => {
+      const { canvas, runtime, element } = create();
+      const provider = vi.fn(() => {
+        expect(surface.isDisposed).toBe(false);
+        return { x: 0, y: 0, width: 280, height: 90 };
+      });
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: provider });
+      expect(provider).not.toHaveBeenCalled();
+      runtime.onPaint(({ drawSurface }) => drawSurface(surface));
+      const painted = runtime.paintOnce();
+      try {
+        emitPaint(canvas);
+        expect(provider).toHaveBeenCalledTimes(1);
+        expect(canvas.context.drawElementImageCalls).toHaveLength(0);
+        expect(element.inert).toBe(true);
+        expect(element.style.pointerEvents).toBe("none");
+        await Promise.resolve();
+        expect(provider).toHaveBeenCalledTimes(1);
+        expect(element.style.width).toBe("280px");
+        emitPaint(canvas);
+        await painted;
+        expect(provider).toHaveBeenCalledTimes(2);
+        expect(canvas.context.drawElementImageCalls).toHaveLength(1);
+      } finally { runtime.destroy(); }
+    });
+
+    it("converges when a style callback repeats the same pending bounds", async () => {
+      const { canvas, runtime, element } = create();
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 120, height: 80 } });
+      const bounds = { x: 0, y: 0, width: 420, height: 100 };
+      const write = element.style.setProperty.bind(element.style);
+      const spy = vi.spyOn(element.style, "setProperty").mockImplementation((name, value, priority) => {
+        write(name, value, priority);
+        if (name === "width") surface.setBounds(bounds);
+      });
+      try {
+        surface.setBounds(bounds);
+        expect(element.style.width).toBe("420px");
+        expect(element.style.height).toBe("100px");
+        runtime.onPaint(({ drawSurface }) => drawSurface(surface));
+        const painted = runtime.paintOnce();
+        emitPaint(canvas);
+        await painted;
+        expect(canvas.context.drawElementImageCalls).toHaveLength(1);
+      } finally { spy.mockRestore(); runtime.destroy(); }
+    });
+
+    it("does not retry an application throw after a layout mismatch", async () => {
+      const { canvas, runtime, element } = create();
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 120, height: 80 } });
+      const appError = new Error("application failure after resize");
+      runtime.onPaint(({ drawSurface }) => {
+        surface.setBounds({ x: 0, y: 0, width: 420, height: 100 });
+        drawSurface(surface);
+        throw appError;
+      });
+      const painted = runtime.paintOnce().catch((error: unknown) => error);
+      const requested = canvas.requestPaintCount;
+      try {
+        emitPaint(canvas);
+        expect(await painted).toBe(appError);
+        await Promise.resolve();
+        expect(canvas.requestPaintCount).toBe(requested);
+        expect(element.style.width).toBe("120px");
+        expect(runtime.diagnostics.health).toBe("healthy");
+      } finally { runtime.destroy(); }
+    });
+
+    it("keeps next-pass callers separate while retrying incomplete layout", async () => {
+      const { canvas, runtime, element } = create();
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 120, height: 80 } });
+      const settled: string[] = [];
+      let pass = 0;
+      let second: Promise<void> | undefined, third: Promise<void> | undefined;
+      runtime.onPaint(({ drawSurface }) => {
+        pass++;
+        if (pass === 1) {
+          surface.setBounds({ x: 0, y: 0, width: 420, height: 100 });
+          second = runtime.paintOnce().then(() => { settled.push("second"); });
+        }
+        if (pass === 2) third = runtime.paintOnce().then(() => { settled.push("third"); });
+        drawSurface(surface);
+      });
+      const first = runtime.paintOnce().then(() => { settled.push("first"); });
+      try {
+        emitPaint(canvas); await Promise.resolve();
+        expect(settled).toEqual([]);
+        emitPaint(canvas); await first; await second;
+        expect(settled).toEqual(["first", "second"]);
+        emitPaint(canvas); await third;
+        expect(settled).toEqual(["first", "second", "third"]);
+      } finally { runtime.destroy(); }
+    });
+
+    it("destroy rejects deferred work and prevents its queued layout writes", async () => {
+      const { canvas, runtime, element } = create();
+      element.style.width = "50px";
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 120, height: 80 } });
+      runtime.onPaint(({ drawSurface }) => {
+        surface.setBounds({ x: 0, y: 0, width: 420, height: 100 });
+        drawSurface(surface);
+      });
+      const painted = runtime.paintOnce().catch((error: unknown) => error);
+      emitPaint(canvas);
+      runtime.destroy();
+      expect(await painted).toBeInstanceOf(Error);
+      await Promise.resolve();
+      expect(element.style.width).toBe("50px");
+      expect(document.visibilityListeners.size).toBe(0);
+      emitPaint(canvas);
+      expect(canvas.context.drawElementImageCalls).toHaveLength(0);
+    });
+
+    it.each([false, true])("preserves hidden-time semantics through layout retry: completesHidden=%s", async (completesHidden) => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+      const { canvas, runtime, element } = create(100);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 120, height: 80 } });
+      let resize = true, width = 120, settled = false;
+      let failure: unknown;
+      runtime.onPaint(({ drawSurface }) => {
+        if (resize) surface.setBounds({ x: 0, y: 0, width: ++width, height: 80 });
+        drawSurface(surface);
+      });
+      const painted = runtime.paintOnce().then(() => { settled = true; }, (error: unknown) => { failure = error; });
+      try {
+        await vi.advanceTimersByTimeAsync(40);
+        emitPaint(canvas); await Promise.resolve();
+        runtime.stop();
+        document.setVisibility("hidden");
+        await vi.advanceTimersByTimeAsync(5000);
+        expect(settled).toBe(false); expect(failure).toBeUndefined();
+        if (completesHidden) {
+          resize = false;
+          emitPaint(canvas); await painted;
+          expect(settled).toBe(true); expect(failure).toBeUndefined();
+        } else {
+          document.setVisibility("visible");
+          await vi.advanceTimersByTimeAsync(59);
+          expect(failure).toBeUndefined();
+          await vi.advanceTimersByTimeAsync(2); await painted;
+          expect(failure).toMatchObject({ code: "paint-timeout" });
+        }
+        expect(document.visibilityListeners.size).toBe(0);
+      } finally { runtime.destroy(); vi.useRealTimers(); }
+    });
+
+    it.each(["width", "height"])("does not write through a transferred owner during %s preparation", (property) => {
+      const first = create(), second = create();
+      const surface = first.runtime.registerSurface(first.element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 120, height: 80 } });
+      const write = first.element.style.setProperty.bind(first.element.style);
+      let transferred = false;
+      const spy = vi.spyOn(first.element.style, "setProperty").mockImplementation((name, value, priority) => {
+        write(name, value, priority);
+        if (!transferred && name === property && value === (property === "width" ? "420px" : "100px")) {
+          transferred = true;
+          surface.dispose();
+          second.runtime.registerSurface(first.element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 80, height: 60 } });
+        }
+      });
+      try {
+        surface.setBounds({ x: 0, y: 0, width: 420, height: 100 });
+        expect(transferred).toBe(true);
+        expect(first.element.parentElement).toBe(second.canvas);
+        expect(first.element.style.width).toBe("80px");
+        expect(first.element.style.height).toBe("60px");
+        first.runtime.destroy();
+        expect(first.element.parentElement).toBe(second.canvas);
+      } finally { spy.mockRestore(); first.runtime.destroy(); second.runtime.destroy(); }
+    });
+
+    it.each([[false, false], [true, false], [false, true], [true, true]])("reports preparation errors without corrupting native health: waiting=%s nativeClass=%s", async (waiting, nativeClass) => {
+      const { canvas, runtime, element } = create();
+      const report = vi.fn(); vi.stubGlobal("reportError", report);
+      const failure = nativeClass ? new PrismNativeError("draw-failed", "app-created native error") : new Error("application setter failure");
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: () => ({ x: 0, y: 0, width: 120, height: 80 }) });
+      runtime.onPaint(({ drawSurface }) => drawSurface(surface));
+      const write = element.style.setProperty.bind(element.style);
+      const spy = vi.spyOn(element.style, "setProperty").mockImplementation((name, value, priority) => {
+        if (name === "width") throw failure;
+        write(name, value, priority);
+      });
+      const result = waiting ? runtime.paintOnce().catch((error: unknown) => error) : undefined;
+      try {
+        emitPaint(canvas); await Promise.resolve();
+        if (waiting) { expect(await result).toBe(failure); expect(report).not.toHaveBeenCalled(); }
+        else expect(report.mock.calls).toEqual([[failure]]);
+        expect(runtime.diagnostics.health).toBe("healthy");
+        expect(runtime.diagnostics.lastError).toBeUndefined();
+        expect(document.visibilityListeners.size).toBe(0);
+      } finally { spy.mockRestore(); runtime.destroy(); }
+    });
+
+    it("retains the original visible-time deadline across incomplete layout passes", async () => {
+      vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+      const { canvas, runtime, element } = create(100);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 120, height: 80 } });
+      let width = 120;
+      runtime.onPaint(({ drawSurface }) => {
+        surface.setBounds({ x: 0, y: 0, width: ++width, height: 80 });
+        drawSurface(surface);
+      });
+      let failure: unknown;
+      const painted = runtime.paintOnce().catch((error: unknown) => { failure = error; });
+      try {
+        await vi.advanceTimersByTimeAsync(40);
+        emitPaint(canvas); await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(40);
+        emitPaint(canvas); await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(21);
+        expect(failure).toMatchObject({ code: "paint-timeout" });
+        await painted;
+      } finally { runtime.destroy(); vi.useRealTimers(); }
+    });
+  });
+
   describe("application paint error reporting", () => {
     it.each([
       [false, false], [false, true], [true, false], [true, true]
@@ -756,7 +1335,7 @@ describe("CanvasRuntime", () => {
       runtime.destroy();
     });
 
-    it("does not request a redundant native paint when bounds update during paint", () => {
+    it("defers native sizing once and avoids redundant paints for unchanged bounds", async () => {
       const canvas = new FakeCanvas(true);
       canvas.ownerDocument = document;
       const element = document.createElement("section");
@@ -774,6 +1353,12 @@ describe("CanvasRuntime", () => {
       emitPaint(canvas);
 
       expect(canvas.requestPaintCount).toBe(0);
+      expect(canvas.context.drawElementImageCalls).toHaveLength(0);
+      await Promise.resolve();
+      expect(canvas.requestPaintCount).toBe(1);
+      emitPaint(canvas);
+      await Promise.resolve();
+      expect(canvas.requestPaintCount).toBe(1);
       expect(canvas.context.drawElementImageCalls.at(-1)).toMatchObject({
         x: 20,
         y: 40,

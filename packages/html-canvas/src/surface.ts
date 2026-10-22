@@ -19,6 +19,7 @@ export type SurfaceOptions = Readonly<{
    * Initial surface bounds in runtime CSS pixels.
    *
    * @remarks
+   * Width and height also size the native source's CSS layout before painting.
    * Use `CanvasSurface.setBounds()` after registration when bounds change.
    */
   bounds: SurfaceBoundsInput;
@@ -30,7 +31,7 @@ export type SurfaceOptions = Readonly<{
 }>;
 
 type SurfaceLifecycle = Readonly<{
-  invalidate(): void;
+  invalidate(bounds: RectLike): void;
   unregister(surface: CanvasSurface): void;
 }>;
 
@@ -104,8 +105,10 @@ export class CanvasSurface {
    * @remarks
    * Use this when application state moves or resizes a surface after
    * registration. Prism converts these CSS-pixel bounds to backing-store pixels
-   * during painting. Calling this outside an active paint pass schedules a
-   * runtime repaint.
+   * during painting. Native width and height are applied before the browser
+   * snapshot. Changing size during a paint pass defers drawing to a later pass;
+   * it does not change the snapshot already being painted. Calling this outside
+   * an active paint pass schedules a runtime repaint.
    *
    * @param bounds - New surface bounds in runtime CSS pixels.
    *
@@ -117,7 +120,7 @@ export class CanvasSurface {
     }
 
     this.boundsInput = bounds;
-    surfaceLifecycles.get(this)?.invalidate();
+    surfaceLifecycles.get(this)?.invalidate(bounds);
   }
 
   /**

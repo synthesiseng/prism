@@ -87,3 +87,23 @@ consumers with NodeNext, Node16 and Bundler resolution (`skipLibCheck: false`)
 and imports the packed JavaScript in Node. It uses the installed TypeScript
 version, requires no dependency installation, and runs in the ordinary CI pack
 job. It does not establish CommonJS support or qualify every TypeScript version.
+
+### Native layout qualification
+
+`layout.native.spec.ts` checks auto-sized text, fractional dimensions, growth beyond
+natural width, and an Atlantic-style fixed width of 280 with measured height.
+It records the first actual draw's source dimensions and pixels, checks the first
+requested event for outside-paint literal changes, and checks the next snapshot
+for changes discovered during paint. It verifies clicks, text reflow, application
+transforms, CSS scaling, stable repeated measurement/layout, one second without
+idle paint events, and conditional restoration of both width and height. Idle
+observation starts immediately after one unmeasured paint settles; pixel/layout
+readback in every paint callback can itself affect browser scheduling. The
+Atlantic-style measurement callback remains enabled during the idle window.
+
+DPR 2 contexts assert the reported device ratio and use the observed backing-store
+ratio for pixel assertions. A context's device ratio alone does not prove a 2×
+backing store; retain the measured ratio when reporting qualification.
+
+These tests run against the configured native browser. Local results do not close
+the hosted PR qualification gate or qualify another browser/OS configuration.

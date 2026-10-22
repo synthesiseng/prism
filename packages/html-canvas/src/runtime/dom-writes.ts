@@ -58,6 +58,13 @@ export class DomWrites {
     this.element.style.setProperty(name, value);
   }
 
+  matchesStyle(name: StyleName): boolean {
+    const last = this.styles.get(name);
+    const current = this.readStyle(name);
+    return !this.closed && last !== undefined &&
+      current[0] === last[0] && current[1] === last[1];
+  }
+
   setAttribute(name: AttributeName, value: string): void {
     if (this.closed) return;
     this.attributes.set(name, value);

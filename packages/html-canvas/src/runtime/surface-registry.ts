@@ -1,3 +1,4 @@
+import type { RectLike } from "@prism/math";
 import { beginSurfaceWrites, releaseSurfaceWrites, writeSurfaceStyle, type DomWrites } from "./dom-writes";
 import { CanvasSurface, setSurfaceLifecycle, type SurfaceOptions } from "../surface";
 import { nativePlatform } from "./native-platform";
@@ -13,6 +14,8 @@ type SurfaceDomState = Readonly<{
 type SurfaceRecord = {
   readonly surface: CanvasSurface;
   readonly domState: SurfaceDomState;
+  prepared?: Readonly<{ width: number; height: number }>;
+  pending?: Readonly<{ width: number; height: number }> | undefined;
 };
 
 const elementOwners = new WeakMap<HTMLElement, SurfaceRegistry>();
@@ -20,7 +23,9 @@ const elementOwners = new WeakMap<HTMLElement, SurfaceRegistry>();
 // Internal owner of registered surfaces and DOM round-trip restoration.
 export class SurfaceRegistry {
   private readonly records: SurfaceRecord[] = [];
+  private readonly layoutDeferred = new Set<CanvasSurface>();
   private closed = false;
+  private preparingLayout = false;
 
   constructor(
     private readonly canvas: HTMLCanvasElement,
@@ -45,7 +50,10 @@ export class SurfaceRegistry {
       const surface = new CanvasSurface(element, options);
       this.assertOpen();
       setSurfaceLifecycle(surface, {
-        invalidate: () => this.onBoundsChange(),
+        invalidate: (bounds) => {
+          this.queueLayout(surface, bounds);
+          this.onBoundsChange();
+        },
         unregister: (target) => this.unregister(target)
       });
       writeSurfaceStyle(element, "position", "absolute");
@@ -57,6 +65,7 @@ export class SurfaceRegistry {
       this.assertOpen();
       record = { surface, domState };
       this.records.push(record);
+      if (typeof options.bounds !== "function") this.queueLayout(surface, options.bounds);
       this.onChange();
       this.assertOpen();
       return surface;
@@ -78,11 +87,75 @@ export class SurfaceRegistry {
     }
   }
 
+  get hasPendingLayout(): boolean {
+    return this.native && this.records.some((record) => record.pending !== undefined);
+  }
+
+  layoutReady(surface: CanvasSurface, bounds: RectLike): boolean {
+    if (!this.native) return true;
+    this.queueLayout(surface, bounds);
+    return !this.records.find((record) => record.surface === surface)?.pending;
+  }
+
+  private queueLayout(surface: CanvasSurface, bounds: RectLike): void {
+    if (!this.native) return;
+    const record = this.records.find((entry) => entry.surface === surface);
+    if (!record) return;
+    if (record.prepared?.width === bounds.width && record.prepared.height === bounds.height &&
+        record.domState.writes.matchesStyle("width") &&
+        record.domState.writes.matchesStyle("height")) {
+      record.pending = undefined;
+      return;
+    }
+    if (record.pending?.width === bounds.width && record.pending.height === bounds.height) return;
+    record.pending = { width: bounds.width, height: bounds.height };
+  }
+
+  prepareLayout(): void {
+    if (this.preparingLayout) return;
+    this.preparingLayout = true;
+    try {
+      for (const record of [...this.records]) {
+        const size = record.pending;
+        if (!size) continue;
+        const current = () => !record.surface.isDisposed &&
+          this.records.includes(record) && record.pending === size;
+        if (!current()) continue;
+        writeSurfaceStyle(record.surface.element, "width", `${String(size.width)}px`);
+        if (!current()) continue;
+        writeSurfaceStyle(record.surface.element, "height", `${String(size.height)}px`);
+        if (!current()) continue;
+        record.prepared = size;
+        record.pending = undefined;
+      }
+    } finally {
+      this.preparingLayout = false;
+    }
+  }
+
+  setLayoutDeferred(surface: CanvasSurface, deferred: boolean): void {
+    if (deferred) this.layoutDeferred.add(surface);
+    else this.layoutDeferred.delete(surface);
+  }
+
+  deactivateDeferred(): void {
+    const deferred = [...this.layoutDeferred];
+    this.layoutDeferred.clear();
+    let failure: { error: unknown } | undefined;
+    for (const surface of deferred) {
+      if (surface.isDisposed) continue;
+      try { deactivateSurface(surface); }
+      catch (error) { failure ??= { error }; }
+    }
+    if (failure) throw failure.error;
+  }
+
   private assertOpen(): void {
     if (this.closed) throw new Error("Cannot register a surface with a destroyed Prism runtime.");
   }
 
   unregister(surface: CanvasSurface): void {
+    this.layoutDeferred.delete(surface);
     const index = this.records.findIndex((record) => record.surface === surface);
     if (index === -1) return;
     const [record] = this.records.splice(index, 1);
