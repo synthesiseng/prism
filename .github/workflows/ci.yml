@@ -137,7 +137,7 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - run: npm pack --json
+      - run: pnpm test:package
 
   typecheck:
     runs-on: ubuntu-latest

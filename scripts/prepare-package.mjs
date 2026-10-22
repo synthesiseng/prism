@@ -35,7 +35,7 @@ async function cleanAndRewrite(directory) {
     }
 
     if (entry.name.endsWith(".js") || entry.name.endsWith(".d.ts")) {
-      await rewriteFile(entryPath, entry.name.endsWith(".js"));
+      await rewriteFile(entryPath);
     }
   }
 }
@@ -49,7 +49,7 @@ function shouldRemove(fileName) {
   );
 }
 
-async function rewriteFile(filePath, isJavaScript) {
+async function rewriteFile(filePath) {
   let contents = await readFile(filePath, "utf8");
   contents = contents.replace(/\n\/\/# sourceMappingURL=.*$/gu, "");
 
@@ -57,9 +57,7 @@ async function rewriteFile(filePath, isJavaScript) {
     contents = rewriteSpecifier(contents, filePath, specifier, target);
   }
 
-  if (isJavaScript) {
-    contents = rewriteRelativeJavaScriptSpecifiers(contents);
-  }
+  contents = rewriteRelativeSpecifiers(contents);
 
   await writeFile(filePath, contents);
 }
@@ -74,8 +72,9 @@ function relativeSpecifier(fromDirectory, target) {
   return relativePath.startsWith(".") ? relativePath : `./${relativePath}`;
 }
 
-function rewriteRelativeJavaScriptSpecifiers(contents) {
-  // Node ESM requires explicit file extensions for relative imports.
+function rewriteRelativeSpecifiers(contents) {
+  // Node ESM requires explicit extensions; TypeScript resolves these .js paths
+  // to the corresponding .d.ts files when checking packaged declarations.
   return contents.replace(
     /(from\s+["'])(\.{1,2}\/[^"']+)(["'])/gu,
     (_match, prefix, specifier, suffix) => {

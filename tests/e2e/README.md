@@ -69,3 +69,21 @@ The native lifecycle check does not certify pixels or hit-testing. The separate
 local compatibility fixture records these against an exact installed browser:
 `node scripts/native-compatibility-spike.mjs /absolute/browser /absolute/result.json`.
 A successful collection exit is not an acceptance verdict. Preserve failed results.
+
+
+The native qualification workflow runs for relevant pushes to `main` and pull
+requests targeting `main`: runtime/core/math sources, E2E fixtures, native
+collection/assertion scripts, browser/TypeScript configuration, dependencies,
+and the workflow itself. Changes limited to the root README or documentation app do not trigger it. Newer
+runs cancel older runs for the same PR or branch; each job is capped at ten
+minutes. The pinned macOS ARM64 browser runs with sandboxing enabled and must
+pass all ten geometry/pixel/click scenarios plus native lifecycle checks.
+This does not qualify Linux. Because path-filtered workflows can be skipped,
+do not treat this as an unconditional required check for every PR.
+
+Packed consumer validation is separate: `pnpm test:package` builds and packs the
+actual public package into a temporary directory, then type-checks isolated ESM
+consumers with NodeNext, Node16 and Bundler resolution (`skipLibCheck: false`)
+and imports the packed JavaScript in Node. It uses the installed TypeScript
+version, requires no dependency installation, and runs in the ordinary CI pack
+job. It does not establish CommonJS support or qualify every TypeScript version.

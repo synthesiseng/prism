@@ -3,10 +3,40 @@ name: Native qualification
 on:
   push:
     branches:
-      - test/native-platform-compatibility-spike
+      - main
     paths:
       - .github/workflows/native-qualification.yml
+      - packages/html-canvas/**
+      - packages/core/**
+      - packages/math/**
+      - tests/e2e/**
+      - scripts/native-compatibility-spike.mjs
       - scripts/assert-native-result.mjs
+      - playwright*.config.ts
+      - tsconfig*.json
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+  pull_request:
+    branches:
+      - main
+    paths:
+      - .github/workflows/native-qualification.yml
+      - packages/html-canvas/**
+      - packages/core/**
+      - packages/math/**
+      - tests/e2e/**
+      - scripts/native-compatibility-spike.mjs
+      - scripts/assert-native-result.mjs
+      - playwright*.config.ts
+      - tsconfig*.json
+      - package.json
+      - pnpm-lock.yaml
+      - pnpm-workspace.yaml
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 permissions:
   contents: read
