@@ -2259,6 +2259,60 @@ describe("CanvasRuntime", () => {
     });
   });
 
+  describe("fallback repaint scheduling", () => {
+    it.each(["frame", "paintOnce"] as const)(
+      "preserves fallback in-paint bounds invalidation after a %s pass",
+      async (origin) => {
+        const raf = new ManualRaf();
+        vi.stubGlobal("requestAnimationFrame", raf.request);
+        vi.stubGlobal("cancelAnimationFrame", raf.cancel);
+        const canvas = new FakeCanvas(false);
+        canvas.ownerDocument = document;
+        const element = document.createElement("section");
+        const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement, {
+          backend: "fallback"
+        });
+        const surface = runtime.registerSurface(element as unknown as HTMLElement, {
+          bounds: { x: 0, y: 0, width: 120, height: 80 }
+        });
+        let paints = 0;
+        runtime.onPaint(({ drawSurface }) => {
+          paints += 1;
+          drawSurface(surface);
+          if (paints === 1) {
+            surface.setBounds({ x: 0, y: 0, width: 240, height: 80 });
+            surface.setBounds({ x: 0, y: 0, width: 420, height: 80 });
+            expect(paints).toBe(1);
+          }
+        });
+
+        try {
+          if (origin === "frame") {
+            runtime.start();
+            raf.step(16);
+          } else {
+            await runtime.paintOnce();
+            expect(raf.pendingCount).toBe(0);
+            runtime.start();
+          }
+          expect(paints).toBe(1);
+          expect(element.style.width).toBe("120px");
+
+          raf.step(32);
+          expect(paints).toBe(2);
+          expect(element.style.width).toBe("420px");
+
+          raf.step(48);
+          expect(paints).toBe(2);
+        } finally {
+          runtime.destroy();
+        }
+        expect(raf.pendingCount).toBe(0);
+      }
+    );
+
+  });
+
   describe("destroy", () => {
     it("cleans up registered surfaces and native paint hooks when destroyed", () => {
       const canvas = new FakeCanvas(true);
