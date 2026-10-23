@@ -683,8 +683,8 @@ export class CanvasRuntime {
   }
 
   private invalidateSurfaceBounds(): void {
-    if (this.isPainting) {
-      // Only a completed handler pass may schedule a layout retry.
+    if (this.isPainting && this.backend.usesNativePaintEvent) {
+      // Only a completed handler pass may schedule a native layout retry.
       return;
     }
 
