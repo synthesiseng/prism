@@ -242,8 +242,12 @@ throws. A request for a later pass remains pending.
 The backend never changes silently after construction. Legacy or partial native
 API shapes are rejected in forced native mode; legacy users can pin alpha.8.
 
-Exact-browser compatibility qualification remains open. Local tests do not
-establish general browser support. The fallback draws placeholders, not HTML.
+[Hosted native qualification](https://github.com/synthesiseng/prism/actions/runs/40004322923)
+passed for Chrome for Testing 158.0.8115.0 on macOS ARM64 with
+`CanvasDrawElement` and Chromium sandboxing enabled. This bounded experimental
+configuration does not establish Linux native qualification or general browser
+support. The fallback draws placeholders, not HTML. See the [unreleased notes](https://github.com/synthesiseng/prism/blob/main/CHANGELOG.md)
+for known diagnostic limitations and release status.
 Native `drawable` also creates isolation; synthetic tests show that some remote
 image content is omitted, so image/export fidelity must be checked per use case.
 
