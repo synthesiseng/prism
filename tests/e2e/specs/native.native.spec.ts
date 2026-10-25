@@ -60,10 +60,14 @@ for (const backend of ["native", "fallback"] as const) {
 }
 
 for (const waiter of [false, true]) {
-  test(`native handler errors preserve identity and platform health with waiter=${String(waiter)}`, async ({ page }) => {
+  test(`native app and platform failures preserve health and settlement with waiter=${String(waiter)}`, async ({ page }) => {
     const result = await page.evaluate(
       (waiter) => window.prismLifecycleFixture.testNativeHandlerErrors(waiter), waiter
     );
     for (const [claim, passed] of Object.entries(result)) expect(passed, claim).toBe(true);
+    const health = await page.evaluate(
+      (waiter) => window.prismLifecycleFixture.testNativeHealthFailures(waiter), waiter
+    );
+    for (const [claim, passed] of Object.entries(health)) expect(passed, claim).toBe(true);
   });
 }

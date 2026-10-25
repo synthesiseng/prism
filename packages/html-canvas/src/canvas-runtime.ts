@@ -586,6 +586,8 @@ export class CanvasRuntime {
         time: this.frameTime,
         invalidate: () => this.invalidate()
       });
+      const requestFailure = this.paintRequestFailures.values().next();
+      if (!requestFailure.done) throw requestFailure.value;
       if (!this.destroyed && !complete) {
         incomplete = true;
         this.paintWaiters.unshift(...waiters);
@@ -647,13 +649,11 @@ export class CanvasRuntime {
   }
 
   private requestNativePaintForWaiters(): void {
-    if (this.destroyed || this.nativePaintRequestedForWaiters) {
-      return;
-    }
+    if (this.destroyed) return;
 
-    this.nativePaintRequestedForWaiters = true;
-    this.nativeHealth = "pending";
-    this.cancelNativeDeadline ??= visiblePaintDeadline(
+    // Invalidation can wait indefinitely for the browser. Only explicit callers
+    // own a diagnostic deadline, including callers joining an existing request.
+    if (this.paintWaiters.length > 0) this.cancelNativeDeadline ??= visiblePaintDeadline(
       this.canvas.ownerDocument,
       this.nativePaintTimeoutMs,
       () => {
@@ -668,12 +668,15 @@ export class CanvasRuntime {
         this.rejectPaintWaiters(error);
       }
     );
+    if (this.nativePaintRequestedForWaiters) return;
+    this.nativePaintRequestedForWaiters = true;
+    this.nativeHealth = "pending";
     try {
       this.backend.requestPaint(this.canvas);
     } catch (error) {
       // Request failures can cross an application handler through invalidate().
       if (this.isPainting || this.isPreparingLayout) this.paintRequestFailures.add(error);
-      this.cancelNativeDeadline();
+      this.cancelNativeDeadline?.();
       this.cancelNativeDeadline = undefined;
       this.nativePaintRequestedForWaiters = false;
       this.nativeHealth = "failed";
