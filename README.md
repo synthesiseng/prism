@@ -31,7 +31,7 @@ Prism handles the lifecycle so you don't have to.
 
 Author visual surfaces with HTML/CSS/SVG. Compose them inside Canvas 2D workflows. Ship data visualizations, design tools, generative art, interactive editors and more.
 
-> **Note:** Native mode requires Chrome Canary with `chrome://flags/#canvas-draw-element` enabled. Prism falls back to a compatibility backend in unsupported browsers.
+> **Note:** Native qualification covers Chrome for Testing 158.0.8115.0 on macOS ARM64 with `chrome://flags/#canvas-draw-element` enabled and Chromium sandboxing enabled. Other browser configurations are not qualified. Fallback draws placeholders, not HTML snapshots.
 
 ---
 
@@ -47,8 +47,10 @@ Your app owns the scene, drawing model, animation loop, and state. Prism owns th
 
 ## Installation
 
+This README describes the unreleased alpha.9 candidate. The command below installs published alpha.8, which uses the earlier native path. Alpha.9 is not available on npm yet.
+
 ```sh
-pnpm add @synthesisengineering/prism
+pnpm add @synthesisengineering/prism@0.1.0-alpha.8
 ```
 
 ## Agent Skill
@@ -115,11 +117,11 @@ new CanvasRuntime(canvas, { backend: "fallback" }); // compatibility only
 
 ```ts
 if (runtime.backendKind !== "native") {
-  console.warn("Compatibility mode is lower fidelity.");
+  console.warn("Compatibility mode draws placeholders, not HTML.");
 }
 ```
 
-The fallback backend is lower fidelity. Native is the target.
+The fallback backend draws placeholders, not HTML snapshots. Native is the target.
 
 ## Coordinate Spaces
 
@@ -248,7 +250,7 @@ throws. A request for a later pass remains pending.
 The backend never changes silently after construction. Legacy or partial native
 API shapes are rejected in forced native mode; legacy users can pin alpha.8.
 
-[Hosted native qualification](https://github.com/synthesiseng/prism/actions/runs/40004322923)
+[Hosted native qualification](https://github.com/synthesiseng/prism/actions/runs/40217890396)
 passed for Chrome for Testing 158.0.8115.0 on macOS ARM64 with
 `CanvasDrawElement` and Chromium sandboxing enabled. This bounded experimental
 configuration does not establish Linux native qualification or general browser
@@ -260,7 +262,7 @@ image content is omitted, so image/export fidelity must be checked per use case.
 ## Considerations
 
 - Native HTML-in-Canvas is experimental.
-- Fallback mode is compatibility-only, lower fidelity, and not equivalent to native HTML rendering.
+- Fallback mode is compatibility-only and draws placeholders, not HTML snapshots.
 - `onPaint()` and `onUpdate()` are additive. Each call registers another handler; it does not replace previous handlers.
 - `invalidate()` schedules another Prism-owned paint pass when app-owned state changes outside Prism APIs.
 - `paintOnce()` works without `start()`. It waits for one runtime-owned paint pass and does not export image data itself.
@@ -272,7 +274,7 @@ image content is omitted, so image/export fidelity must be checked per use case.
 ## Limitations
 
 - Native mode depends on browser support for HTML-in-Canvas.
-- The fallback backend is lower fidelity than native HTML rendering.
+- The fallback backend draws placeholders rather than native HTML content.
 - Prism v1 is 2D-first.
 - WebGL/WebGPU integrations are future-facing.
 

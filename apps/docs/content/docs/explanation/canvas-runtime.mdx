@@ -18,6 +18,8 @@ It does not own app state, chart data, template data, React state, game state, o
 ## Core methods
 
 - `registerSurface(element, options)`
+- `unregisterSurface(surface)`
+- `invalidate()`
 - `onPaint(handler)`
 - `onUpdate(handler)`
 - `paintOnce()`
@@ -25,6 +27,8 @@ It does not own app state, chart data, template data, React state, game state, o
 - `stop()`
 - `destroy()`
 - coordinate conversion helpers
+
+`nativePaintTimeoutMs` configures the visible-time deadline for `paintOnce()`. `runtime.diagnostics` reports backend capability and native paint health. See [Types](/docs/reference/types) and [paintOnce()](/docs/explanation/paint-once).
 
 ## Callback semantics
 

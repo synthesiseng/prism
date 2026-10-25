@@ -18,3 +18,4 @@ If your canvas drawing applies a transform, keep the same source of truth for th
 
 Use coordinate helpers when pointer input or backing-store drawing needs to cross the CSS-pixel boundary.
 
+Chrome owns native geometry synchronization. Prism preserves application CSS transforms and does not write compensating transforms or correct pointer coordinates. Bounds set source layout width and height as well as placement; they are not just a scaling destination.

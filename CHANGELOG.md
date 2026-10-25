@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.1.0-alpha.9 — Unreleased
 
 ### Changed
 
@@ -24,6 +24,6 @@
 
 ### Qualification and release status
 
-- Merged main `da279a2a17b2931a945ea3a78eec57f526ff90dc` passed [ordinary CI](https://github.com/synthesiseng/prism/actions/runs/40004323028) and [native qualification](https://github.com/synthesiseng/prism/actions/runs/40004322923): 146 unit tests, 5 fallback browser tests, packed consumers, 10 native lifecycle/layout tests and 10 raw-platform/Prism geometry, pixel and click scenarios. Native evidence covers Chrome for Testing 158.0.8115.0 on macOS ARM64 with `CanvasDrawElement` enabled and Chromium sandboxing enabled, including DPR 2, CSS scaling, transforms and relocation.
+- Merged main `3297d09d2f3352786e506d35180492f89f887b12` passed [ordinary CI](https://github.com/synthesiseng/prism/actions/runs/40217890346) and [native qualification](https://github.com/synthesiseng/prism/actions/runs/40217890396): 154 unit tests, 5 fallback browser tests, packed consumers, 10 native lifecycle/layout tests and 10 raw-platform/Prism geometry, pixel and click scenarios. Native evidence covers Chrome for Testing 158.0.8115.0 on macOS ARM64 with `CanvasDrawElement` enabled and Chromium sandboxing enabled, including DPR 2, CSS scaling, transforms and relocation.
 - This is a bounded experimental configuration, not general browser support. Linux native qualification is not established; earlier Chrome for Testing 156 hit-testing failures remain disqualifying for that configuration. The fallback renders placeholders, not HTML snapshots. Image/export fidelity and drawable isolation remain use-case limitations.
-- These are draft unreleased alpha.9 notes. Package version remains `0.1.0-alpha.8`; no alpha.9 release has been published by this work. Final release-risk disposition, approval of versioning and qualification of the versioned package remain separate steps.
+- Package metadata is prepared as `0.1.0-alpha.9`; the release remains unpublished. The hosted evidence above covers the merged runtime before this version and documentation change, not the versioned candidate. Final candidate verification, review disposition and publication approval remain separate steps.

@@ -124,8 +124,8 @@ export function PrismTopNav() {
             className="prism-brand-logo"
           />
           Prism
-          <code title="v0.1.0-alpha.8" aria-label="Version 0.1.0 alpha 8">
-            alpha.8
+          <code title="v0.1.0-alpha.9 — unreleased" aria-label="Version 0.1.0 alpha 9, unreleased">
+            alpha.9 · unreleased
           </code>
         </Link>
 

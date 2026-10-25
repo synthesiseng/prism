@@ -3,10 +3,12 @@ title: Installation
 description: Install Prism and enable native HTML-in-Canvas support in Chromium-based browsers.
 ---
 
-Install the package from the public package root:
+These docs describe the unreleased alpha.9 candidate. The published package is alpha.8; alpha.9 is not available on npm yet.
+
+Install the published package from the public package root:
 
 ```sh
-npm i @synthesisengineering/prism
+npm i @synthesisengineering/prism@0.1.0-alpha.8
 ```
 
 Use the package root for app code:
@@ -19,7 +21,9 @@ Subpath imports are not supported public API.
 
 ## Enable native rendering
 
-Native mode currently requires the browser's Canvas Draw Element flag.
+Alpha.9 native qualification covers Chrome for Testing 158.0.8115.0 on macOS ARM64 with Canvas Draw Element and Chromium sandboxing enabled. This does not establish general Chrome, Brave or Linux support.
+
+Native mode requires the browser's Canvas Draw Element flag. The flag alone does not establish compatibility; forced native mode rejects legacy or partial API shapes. Published alpha.8 uses the earlier native path.
 
 Chrome:
 
@@ -37,4 +41,4 @@ The flag is browser-local. Enabling it in Chrome does not enable it in Brave.
 
 ## Fallback
 
-Prism can run in fallback mode for compatibility, but fallback is lower fidelity than native HTML-in-Canvas. Treat it as a compatibility path, not the definition of Prism's rendering behavior.
+Prism can run in fallback mode for compatibility, but fallback draws placeholders, not HTML snapshots. Treat it as a compatibility path, not the definition of Prism's rendering behavior.

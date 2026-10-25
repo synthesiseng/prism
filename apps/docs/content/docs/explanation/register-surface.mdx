@@ -11,7 +11,7 @@ const surface = runtime.registerSurface(element, {
 });
 ```
 
-The app still owns the element's content, component tree, and styles. Prism owns the runtime registration and paint integration for that element.
+The app still owns the element's content, component tree, and application CSS transforms. Prism owns registration, paint integration and the layout width and height set by surface bounds.
 
 Surface bounds are CSS pixels. Direct canvas drawing inside paint handlers uses backing-store pixels.
 

@@ -47,7 +47,7 @@ Prism does not replace your renderer. It gives canvas applications managed DOM-a
 
 Prism v1 is 2D-first. WebGL/WebGPU and renderer integrations are future-facing, not the current public API center.
 
-Native HTML-in-Canvas currently requires a Chromium-based browser build with the Canvas Draw Element flag enabled. Chrome uses:
+These docs describe unreleased alpha.9. See [Installation](/docs/tutorials/installation) for the published package and qualified native browser configuration. Native mode requires Canvas Draw Element; the flag alone does not establish compatibility. Chrome uses:
 
 ```txt
 chrome://flags/#canvas-draw-element
@@ -59,4 +59,4 @@ Brave uses:
 brave://flags/#canvas-draw-element
 ```
 
-Fallback exists only as a lower-fidelity compatibility path. It does not define the public API and is not equivalent to native HTML rendering.
+Fallback draws placeholders, not HTML snapshots. It exists only as a compatibility path and does not define the public API.

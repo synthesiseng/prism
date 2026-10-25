@@ -24,8 +24,24 @@ type CanvasBackendPreference = "auto" | CanvasBackendKind;
 
 type CanvasRuntimeOptions = Readonly<{
   backend?: CanvasBackendPreference;
+  nativePaintTimeoutMs?: number;
 }>;
 ```
+
+`nativePaintTimeoutMs` defaults to 2000 ms and must be finite, greater than 0 and at most 2147483647. It counts visible time for pending `paintOnce()` callers. See [paintOnce()](/docs/explanation/paint-once).
+
+```ts
+type CanvasDiagnostics = Readonly<{
+  backend: CanvasBackendKind;
+  capability: "supported" | "unavailable" | "unsupported-version";
+  health?: "idle" | "pending" | "healthy" | "failed";
+  lastError?: PrismNativeError;
+}>;
+```
+
+`runtime.diagnostics` returns this snapshot. Capability describes API presence; native health describes the last paint outcome. Fallback diagnostics omit `health` and `lastError`.
+
+`PrismNativeError` extends `Error`. Its `code` is `"draw-failed"` or `"paint-timeout"`; draw failures retain the original exception as `cause`. Import it from the package root.
 
 ## Surface
 
