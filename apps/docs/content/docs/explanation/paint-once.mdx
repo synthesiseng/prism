@@ -32,3 +32,11 @@ completed while hidden still resolve. A late event cannot revive rejected caller
 Timers and visibility listeners are removed when the request settles or the
 runtime is destroyed. `nativePaintTimeoutMs` defaults provisionally to 2000 ms;
 this is a diagnostic threshold, not a scheduling guarantee.
+
+Only pending `paintOnce()` callers own this deadline. `invalidate()` without a
+waiting caller does not time out; a caller joining its outstanding native request
+starts the budget then. Further invalidation or coalesced callers do not reset it.
+
+Catching a native `drawSurface()` failure inside `onPaint()` cannot turn that pass
+into success. Its waiters still reject with the original `PrismNativeError`, and
+native diagnostics retain the failure. A later successful pass can restore health.

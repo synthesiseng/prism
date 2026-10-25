@@ -100,6 +100,10 @@ export function flushPaintPass(options: PaintPassOptions): boolean {
     failure = { error };
   } finally {
     if (native) {
+      // A handler may catch a failed draw and return or throw another value.
+      // Neither can turn this platform-failed pass into a successful paint.
+      const backendFailure = backendFailures.values().next();
+      if (!backendFailure.done) failure = { error: backendFailure.value };
       // Keep stable active sources unchanged: toggling inert before application
       // layout reads can invalidate the next native snapshot indefinitely.
       surfaces.forEachSurface((surface) => {

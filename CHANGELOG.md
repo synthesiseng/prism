@@ -15,14 +15,12 @@
 
 ### Fixed
 
+- Native diagnostic deadlines are owned by pending `paintOnce()` callers. Waiter-free invalidation can remain pending without a fabricated timeout; joining that outstanding request starts a visible-time budget, and repeated invalidation or concurrent callers do not reset it.
+- A native draw failure keeps its paint pass failed even if application code catches the error, draws again successfully, returns normally or throws a different application error. Waiting callers reject with the original native error and diagnostics retain it. A later successful pass restores health; callers requesting that later pass remain separate. Caught native request failures likewise cannot become successful settlement.
+
 - Fallback bounds changes made inside `onPaint()` now retain repaint work for the next runtime frame. Multiple updates coalesce to the latest bounds without recursive painting or extra idle paints. A stopped runtime still needs `start()` or an explicit paint to consume pending fallback work.
 - Packed declarations use resolvable relative imports with explicit extensions. Actual tarball consumers pass strict TypeScript NodeNext, Node16 and Bundler resolution, plus Node ESM import. The package remains ESM with Node >=22; the Node16 resolution test does not claim Node 16 runtime support.
 - Native request failures remain authoritative when application callbacks catch them and throw another value. DOM placement restoration is attempted even if tracked-property restoration fails, preserving the first cleanup error if both fail.
-
-### Deferred — open findings
-
-- `invalidate()` can arm a native paint deadline without a waiting `paintOnce()` caller. If the browser does not deliver that paint, diagnostics can report `failed` / `paint-timeout` even though no explicit one-shot paint is awaiting completion. This can be misleading for hidden elements or detached canvases; the diagnostic policy correction remains deferred.
-- When an application catches a native draw failure inside its paint handler and then returns normally, the pass can resolve waiting `paintOnce()` callers, report `healthy` and clear `lastError` despite the failed draw. Do not treat those diagnostics or settlement as proof that every caught drawing operation succeeded. The health-reporting correction remains deferred.
 
 ### Qualification and release status
 

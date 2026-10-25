@@ -2843,6 +2843,138 @@ describe("CanvasRuntime", () => {
       expect(document.visibilityListeners.size).toBe(0);
       expect(vi.getTimerCount()).toBe(0);
     });
+    it("does not time out waiter-free invalidation and starts the budget when a waiter joins", async () => {
+      const { canvas, runtime } = native();
+      try {
+        runtime.invalidate();
+        runtime.invalidate();
+        expect(canvas.requestPaintCount).toBe(1);
+        expect(vi.getTimerCount()).toBe(0);
+        expect(document.visibilityListeners.size).toBe(0);
+        await vi.advanceTimersByTimeAsync(300);
+        expect(runtime.diagnostics.health).toBe("pending");
+        expect(runtime.diagnostics.lastError).toBeUndefined();
+        const first = runtime.paintOnce().catch((error: unknown) => error);
+        await vi.advanceTimersByTimeAsync(60);
+        runtime.invalidate();
+        const second = runtime.paintOnce().catch((error: unknown) => error);
+        expect(canvas.requestPaintCount).toBe(1);
+        expect(vi.getTimerCount()).toBe(1);
+        await vi.advanceTimersByTimeAsync(40);
+        const error = await first;
+        expect(error).toMatchObject({ code: "paint-timeout" });
+        expect(await second).toBe(error);
+        expect(runtime.diagnostics.lastError).toBe(error);
+        expect(document.visibilityListeners.size).toBe(0);
+        expect(vi.getTimerCount()).toBe(0);
+        emitPaint(canvas);
+        expect(runtime.diagnostics.health).toBe("healthy");
+        expect(runtime.diagnostics.lastError).toBeUndefined();
+      } finally { runtime.destroy(); }
+    });
+
+    it.each(["return", "draw again", "throw app error"] as const)(
+      "rejects caught native draw failure despite handler %s and recovers on a later pass",
+      async (outcome) => {
+        const { canvas, runtime } = native();
+        const surface = runtime.registerSurface(document.createElement("section") as unknown as HTMLElement, {
+          bounds: { x: 0, y: 0, width: 30, height: 40 }
+        });
+        const cause = new Error("browser draw refused");
+        const originalDraw = canvas.context.drawElementImage;
+        let caught: unknown;
+        let fail = true;
+        canvas.context.drawElementImage = () => { throw cause; };
+        runtime.onPaint(({ drawSurface }) => {
+          if (!fail) { drawSurface(surface); return; }
+          try { drawSurface(surface); } catch (error) { caught = error; }
+          if (outcome === "draw again") {
+            canvas.context.drawElementImage = originalDraw;
+            drawSurface(surface);
+          }
+          if (outcome === "throw app error") throw new Error("different app error");
+        });
+        const first = runtime.paintOnce().then(() => "resolved", (error: unknown) => error);
+        const second = runtime.paintOnce().then(() => "resolved", (error: unknown) => error);
+        try {
+          emitPaint(canvas);
+          expect(caught).toMatchObject({ code: "draw-failed", cause });
+          expect(await first).toBe(caught);
+          expect(await second).toBe(caught);
+          expect(runtime.diagnostics.health).toBe("failed");
+          expect(runtime.diagnostics.lastError).toBe(caught);
+          expect(vi.getTimerCount()).toBe(0);
+          expect(document.visibilityListeners.size).toBe(0);
+          fail = false;
+          canvas.context.drawElementImage = originalDraw;
+          const recovery = runtime.paintOnce();
+          emitPaint(canvas);
+          await recovery;
+          expect(runtime.diagnostics.health).toBe("healthy");
+          expect(runtime.diagnostics.lastError).toBeUndefined();
+        } finally { runtime.destroy(); }
+      }
+    );
+
+    it.each([false, true])("retains caught draw failure without settling a next-pass waiter: waiting=%s", async (waiting) => {
+      const { canvas, runtime } = native();
+      const el = document.createElement("section");
+      const surface = runtime.registerSurface(el as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 5, height: 5 } });
+      const draw = canvas.context.drawElementImage;
+      const cause = new Error("native failure");
+      canvas.context.drawElementImage = () => { throw cause; };
+      let caught: unknown, nextResult: unknown;
+      let next: Promise<void> | undefined;
+      runtime.onPaint(({ drawSurface }) => {
+        try { drawSurface(surface); } catch (error) { caught = error; }
+        if (!next) next = runtime.paintOnce().then(() => { nextResult = "resolved"; });
+      });
+      const active = waiting ? runtime.paintOnce().catch((error: unknown) => error) : undefined;
+      try {
+        emitPaint(canvas);
+        if (waiting) expect(await active).toBe(caught);
+        expect(caught).toMatchObject({ code: "draw-failed", cause });
+        expect(runtime.diagnostics.lastError).toBe(caught);
+        // Existing diagnostic contract: an outstanding later request is pending.
+        expect(runtime.diagnostics.health).toBe("pending");
+        expect(nextResult).toBeUndefined();
+        expect(vi.getTimerCount()).toBe(1);
+        canvas.context.drawElementImage = draw;
+        emitPaint(canvas); await next;
+        expect(nextResult).toBe("resolved");
+        expect(runtime.diagnostics.health).toBe("healthy");
+        expect(runtime.diagnostics.lastError).toBeUndefined();
+        expect(vi.getTimerCount()).toBe(0);
+      } finally { runtime.destroy(); }
+    });
+
+    it("retains a caught request failure even when the handler returns normally", async () => {
+      const { canvas, runtime } = native();
+      const failure = new PrismNativeError("draw-failed", "request refused");
+      runtime.onPaint(({ invalidate }) => { try { invalidate(); } catch { /* app handles the throw */ } });
+      const result = runtime.paintOnce().then(() => "resolved", (error: unknown) => error);
+      canvas.requestPaint = () => { throw failure; };
+      try {
+        emitPaint(canvas);
+        expect(await result).toBe(failure);
+        expect(runtime.diagnostics.health).toBe("failed");
+        expect(runtime.diagnostics.lastError).toBe(failure);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally { runtime.destroy(); }
+    });
+
+    it("cleans a waiter joining waiter-free invalidation on destroy without stop cancelling it", async () => {
+      const { runtime } = native();
+      runtime.invalidate();
+      const result = runtime.paintOnce().catch((error: unknown) => error);
+      runtime.stop();
+      expect(vi.getTimerCount()).toBe(1);
+      runtime.destroy();
+      expect(await result).toBeInstanceOf(Error);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(document.visibilityListeners.size).toBe(0);
+    });
+
     it("wraps a native draw error once with its original cause", async () => {
       const { canvas, runtime } = native();
       const cause = new Error("browser draw refused");

@@ -225,7 +225,10 @@ and cleanup restores the initial value. DOM parent placement is restored as befo
 Concurrent callers share the next pass; requests made inside a paint handler wait
 for a later pass. `destroy()` rejects outstanding requests and releases resources.
 
-Native requests have a visible-time diagnostic deadline (`nativePaintTimeoutMs`).
+Pending native `paintOnce()` callers own a visible-time diagnostic deadline
+(`nativePaintTimeoutMs`). Invalidation without waiting callers does not arm a
+deadline. A caller joining an outstanding invalidation starts its budget then;
+repeated invalidation and concurrent callers do not reset it.
 Hidden time pauses the remaining budget without resetting it; a paint completed
 while hidden still succeeds. The default is provisionally 2000 ms and is not a
 browser scheduling guarantee or a measured performance target.
@@ -233,7 +236,10 @@ browser scheduling guarantee or a measured performance target.
 `diagnostics` reports backend, capability and native health (`idle`, `pending`,
 `healthy`, `failed`). Capability describes API presence, not verified rendering.
 `PrismNativeError` reports `paint-timeout` or `draw-failed`; draw failures preserve
-the original exception as `cause`. A later successful paint can restore health.
+the original exception as `cause`. Catching a failed `drawSurface()` inside an
+application handler does not make that pass successful: its waiting callers still
+reject and diagnostics retain the native failure, even if a later draw in the
+same pass succeeds. A later successful paint can restore health.
 Application paint-handler exceptions reject the callers waiting for that pass with
 the original thrown value. When none are waiting, Prism calls `reportError()`.
 Application exceptions do not become native errors, enter `lastError`, or mark
@@ -247,7 +253,7 @@ passed for Chrome for Testing 158.0.8115.0 on macOS ARM64 with
 `CanvasDrawElement` and Chromium sandboxing enabled. This bounded experimental
 configuration does not establish Linux native qualification or general browser
 support. The fallback draws placeholders, not HTML. See the [unreleased notes](https://github.com/synthesiseng/prism/blob/main/CHANGELOG.md)
-for known diagnostic limitations and release status.
+for qualification limits and release status.
 Native `drawable` also creates isolation; synthetic tests show that some remote
 image content is omitted, so image/export fidelity must be checked per use case.
 

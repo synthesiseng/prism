@@ -1,4 +1,4 @@
-import { CanvasRuntime } from "@synthesisengineering/prism";
+import { CanvasRuntime, PrismNativeError } from "@synthesisengineering/prism";
 
 type Bounds = Readonly<{
   x: number;
@@ -83,6 +83,7 @@ type PrismLifecycleFixture = Readonly<{
   testNativeLifecycle(): Promise<NativeLifecycleResult>;
   testConditionalRestore(backend: "native" | "fallback", appChanges: boolean): Promise<Record<string, boolean>>;
   testNativeHandlerErrors(waiter: boolean): Promise<Record<string, boolean>>;
+  testNativeHealthFailures(waiter: boolean): Promise<Record<string, boolean>>;
 }>;
 
 type NativeCanvasContext = CanvasRenderingContext2D & {
@@ -115,7 +116,8 @@ window.prismLifecycleFixture = {
   testResizeBoundsCleanup,
   testNativeLifecycle,
   testConditionalRestore,
-  testNativeHandlerErrors
+  testNativeHandlerErrors,
+  testNativeHealthFailures
 };
 
 async function runCreateDestroyCycles(cycles: number): Promise<LifecycleCycleResult[]> {
@@ -720,6 +722,71 @@ async function testNativeHandlerErrors(waiter: boolean): Promise<Record<string, 
     };
   } finally {
     window.removeEventListener("error", onError);
+    runtime.destroy();
+    root.remove();
+  }
+}
+
+
+async function testNativeHealthFailures(waiter: boolean): Promise<Record<string, boolean>> {
+  const root = createCycleRoot(102);
+  const canvas = createCanvas(102);
+  canvas.style.display = "none";
+  const element = document.createElement("div");
+  element.style.background = "rgb(255, 0, 0)";
+  root.append(canvas, element);
+  // Model missing delivery explicitly: Chrome may still emit paint for a CSS-hidden
+  // source (and drawing its unavailable snapshot can legitimately fail).
+  const withholdPaint = (event: Event) => event.stopImmediatePropagation();
+  canvas.addEventListener("paint", withholdPaint, true);
+  const runtime = new CanvasRuntime(canvas, { backend: "native", nativePaintTimeoutMs: 400 });
+  const surface = runtime.registerSurface(element, { bounds: { x: 0, y: 0, width: 40, height: 40 } });
+  const context = canvas.getContext("2d") as NativeCanvasContext;
+  const originalDraw = context.drawElementImage;
+  if (!originalDraw) throw new Error("Missing native draw method");
+  const cause = new Error("Expected injected platform draw refusal");
+  let caught: unknown;
+  let paintCount = 0;
+  runtime.onPaint(({ drawSurface }) => {
+    paintCount++;
+    try { drawSurface(surface); } catch (error) { caught = error; }
+  });
+  try {
+    // Withhold native events only for deadline proof; recovery uses actual delivery.
+    runtime.invalidate();
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    runtime.invalidate();
+    const noFalseTimeout = runtime.diagnostics.health === "pending" && runtime.diagnostics.lastError === undefined;
+    const hiddenPaintCount = paintCount;
+    const timeout = await runtime.paintOnce().then(() => undefined, (error: unknown) => error);
+    const joinedDeadline = timeout instanceof PrismNativeError && timeout.code === "paint-timeout";
+    canvas.removeEventListener("paint", withholdPaint, true);
+    canvas.style.display = "";
+    await runtime.paintOnce();
+    const recoveredFromTimeout = runtime.diagnostics.health === "healthy" && runtime.diagnostics.lastError === undefined;
+    context.drawElementImage = () => { throw cause; };
+    let rejected: unknown;
+    if (waiter) rejected = await runtime.paintOnce().then(() => "resolved", (error: unknown) => error);
+    else {
+      runtime.invalidate();
+      await waitForCondition(() => caught !== undefined);
+    }
+    const failed = runtime.diagnostics.health === "failed";
+    const retainedError = runtime.diagnostics.lastError === caught;
+    const identity = caught instanceof PrismNativeError && caught.code === "draw-failed" && caught.cause === cause;
+    context.drawElementImage = originalDraw;
+    await runtime.paintOnce();
+    const pixels = context.getImageData(10, 10, 1, 1).data;
+    return {
+      noFalseTimeout, withheldPaintNotDelivered: hiddenPaintCount === 0, joinedDeadline,
+      recoveredFromTimeout, failed, retainedError, identity,
+      originalRejection: !waiter || rejected === caught,
+      recovery: runtime.diagnostics.health === "healthy" && runtime.diagnostics.lastError === undefined,
+      recoveredPixels: pixels[0] === 255 && pixels[1] === 0 && pixels[2] === 0 && pixels[3] === 255
+    };
+  } finally {
+    context.drawElementImage = originalDraw;
+    canvas.removeEventListener("paint", withholdPaint, true);
     runtime.destroy();
     root.remove();
   }
