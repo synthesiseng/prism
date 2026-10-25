@@ -14,6 +14,8 @@ Everything outside the package root is not public API. Runtime internals, backen
 ## Public exports
 
 - `CanvasRuntime`
+- `PrismNativeError`
+- `type CanvasDiagnostics`
 - `type CanvasSurface`
 - `type CanvasBackendKind`
 - `type CanvasBackendPreference`
@@ -24,7 +26,7 @@ Everything outside the package root is not public API. Runtime internals, backen
 - `type UpdateHandler`
 - `type CanvasPoint`
 
-`CanvasRuntime` is the only constructible public runtime class.
+`CanvasRuntime` is the only constructible public runtime class. `PrismNativeError` is the diagnostic error class for native paint failures.
 
 `CanvasSurface` is a public TypeScript type. Surface instances are returned by
 `registerSurface()` and should not be constructed by apps.

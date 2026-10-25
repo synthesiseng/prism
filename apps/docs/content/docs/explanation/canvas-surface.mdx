@@ -19,13 +19,15 @@ const surface = runtime.registerSurface(element, {
 - `setBounds(bounds)`
 - `dispose()`
 
-Surface bounds are CSS pixels. Use `setBounds()` when layout changes; do not reach into backend or native implementation details.
+Surface bounds are CSS pixels. Width and height set the source layout size as well as the drawing rectangle. Use `setBounds()` when layout changes; do not reach into backend or native implementation details.
+
+Prism applies native sizing before the browser snapshot. A size change during `onPaint()` defers drawing until a fresh snapshot; `paintOnce()` waits for that pass. Function-based bounds are evaluated when drawn and can also defer a pass. Keep paint handlers repeatable: a retry runs them again, and earlier drawing in an incomplete pass is not rolled back.
 
 ```ts
 surface.setBounds({ x: 48, y: 64, width: 420, height: 240 });
 surface.dispose();
 ```
 
-Disposing a surface unregisters it from the runtime and restores Prism-owned DOM state. Calling `dispose()` more than once is safe.
+Disposing a surface unregisters it from the runtime and restores Prism-owned DOM state when it still matches Prism's last write. See [Cleanup](/docs/explanation/cleanup). Calling `dispose()` more than once is safe.
 
 `runtime.destroy()` disposes every registered surface. After disposal, `isDisposed` is `true`; `getBounds()` and `setBounds()` throw.

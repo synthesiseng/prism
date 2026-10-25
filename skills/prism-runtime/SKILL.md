@@ -133,8 +133,10 @@ Do not use Prism just to draw static SVG/image assets. If the source is static a
 
 ## Install
 
+This guide describes unreleased alpha.9. The command below installs published alpha.8, which uses the earlier native path. Alpha.9 is not available on npm yet.
+
 ```sh
-pnpm add @synthesisengineering/prism
+pnpm add @synthesisengineering/prism@0.1.0-alpha.8
 ```
 
 ## Imports
@@ -190,6 +192,7 @@ Useful public properties:
 - `runtime.height`
 - `runtime.pixelRatio`
 - `runtime.backendKind`
+- `runtime.diagnostics`
 
 Use `runtime.backendKind` to check whether the selected backend is `"native"` or `"fallback"`.
 
@@ -246,7 +249,9 @@ For Prism-composited exports, use this sequence:
 
 ## Coordinate Spaces
 
-- Surface bounds use CSS pixels.
+- Surface bounds use CSS pixels and set source layout width/height before the native snapshot.
+- Native size changes during paint defer drawing and `paintOnce()` settlement until a fresh snapshot.
+- Application CSS transforms are preserved; the browser owns native geometry.
 - Direct `ctx` drawing uses backing-store pixels.
 - Use Prism helpers when aligning canvas drawing with surface coordinates.
 
@@ -270,6 +275,8 @@ Examples:
 
 Some Prism APIs invalidate automatically, such as `surface.setBounds()` outside an active paint pass.
 
+During paint, native size changes defer drawing until a fresh snapshot after the handler pass completes. Fallback bounds changes retain work for the next runtime frame. A stopped fallback runtime needs `start()` or `paintOnce()` to consume that work.
+
 ## Lifecycle
 
 ```ts
@@ -280,7 +287,11 @@ runtime.unregisterSurface(surface);
 runtime.destroy();
 ```
 
-Destroying a runtime disposes registered surfaces.
+Destroying a runtime disposes registered surfaces and rejects pending `paintOnce()` requests. `stop()` only stops animation.
+
+Cleanup restores an initial style or attribute value only while it still matches Prism's last write, including width/height and per-frame interaction toggles. Different application values survive. Same-value application writes cannot be distinguished.
+
+An element can belong to only one active surface within the loaded module instance. Duplicate registration throws within or across runtimes; dispose or unregister before transferring ownership.
 
 After disposal:
 
@@ -310,7 +321,7 @@ Do not reuse destroyed runtimes.
 
 ## Native Support
 
-Native HTML-in-Canvas currently requires Chromium or Chrome Canary with:
+Alpha.9 native qualification covers Chrome for Testing 158.0.8115.0 on macOS ARM64 with Chromium sandboxing enabled and:
 
 ```txt
 chrome://flags/#canvas-draw-element
@@ -324,7 +335,9 @@ if (runtime.backendKind !== "native") {
 
 Fallback can be useful for development and compatibility checks, but native-fidelity examples should show a support gate when `runtime.backendKind !== "native"`.
 
-Fallback is compatibility-only and lower fidelity. Do not present fallback as equivalent to native HTML rendering.
+The flag alone does not establish compatibility; other browser configurations are not qualified. Forced native mode rejects legacy or partial API shapes.
+
+Fallback draws placeholders, not HTML snapshots. Do not present fallback as equivalent to native HTML rendering.
 
 ## Rules (Non-Negotiable)
 
@@ -339,7 +352,7 @@ Fallback is compatibility-only and lower fidelity. Do not present fallback as eq
 9. Do not store `CanvasRuntime` or `CanvasSurface` in serializable document/framework state.
 10. For export, always wait for `document.fonts.ready` and `runtime.paintOnce()` before `canvas.toBlob()`.
 11. Destroyed runtimes are not reusable.
-12. Fallback is compatibility-only and lower fidelity.
+12. Fallback is compatibility-only and draws placeholders, not HTML snapshots.
 
 ## Forbidden Patterns
 
@@ -423,11 +436,11 @@ Surface does not appear: check that the source DOM node exists, is registered th
 
 Export is empty or stale: use the required sequence: assets loaded/decoded -> `document.fonts.ready` -> `runtime.paintOnce()` -> `canvas.toBlob()`.
 
-Native backend expected but fallback selected: the browser does not expose native HTML-in-Canvas. Use Chromium/Chrome Canary with `chrome://flags/#canvas-draw-element` enabled, or show the support gate.
+Native backend expected but fallback selected: the browser does not expose native HTML-in-Canvas. Use the qualified configuration in Native Support, or show the support gate.
 
 Surface alignment is off: surface bounds are CSS pixels. Direct canvas drawing is backing-store pixels. Use `cssPointToCanvasPixels()` and `cssLengthToCanvasPixels()` when aligning manual canvas drawing.
 
-Paint handlers run too many times: `onPaint()` and `onUpdate()` are additive. A handler was likely registered inside a render loop, pointer handler, or React render body. Move registration to stable setup.
+Paint handlers run too many times: native layout changes can legitimately retry a paint before `paintOnce()` settles. Keep handlers repeatable. Also check handler registration: `onPaint()` and `onUpdate()` are additive. Move registration out of render loops, pointer handlers and React render bodies.
 
 ## Output Checklist
 
