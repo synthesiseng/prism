@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import { readFile, writeFile } from "node:fs/promises";
+import path from "node:path";
 import snapshot from "../../../apps/prism-atlantic/src/data/atlantic-snapshot.json" with { type: "json" };
 
 const frames = (page: Page) => page.evaluate(() => new Promise<void>(resolve => {
@@ -54,7 +55,11 @@ test("published Atlantic interaction, resize and current PNG export", async ({ p
   await expect(page.locator("#native-gate")).toBeHidden();
   await frames(page);
   expect(responses.length).toBeGreaterThan(0);
-  expect(responses.every(url => !url.includes("html-canvas/src"))).toBe(true);
+  const publishedModule = path.join(process.env.PRISM_PUBLISHED_PACKAGE_DIR!, "packages/html-canvas/dist/index.js").replaceAll("\\", "/");
+  const expectedModulePath = `/@fs/${publishedModule.replace(/^\//, "")}`;
+  for (const url of responses) {
+    expect(decodeURIComponent(new URL(url).pathname)).toBe(expectedModulePath);
+  }
   await page.screenshot({ path: info.outputPath("initial.png") });
 
   // The app's filter highlights a category; it does not remove other tracks.

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
 const packageDirectory = process.env.PRISM_PUBLISHED_PACKAGE_DIR;
@@ -10,7 +11,7 @@ const metadata = JSON.parse(readFileSync(path.join(packageDirectory, "package.js
 if (metadata.name !== "@synthesisengineering/prism" || metadata.version !== "0.1.0-alpha.9") {
   throw new Error("Atlantic qualification requires the published Prism 0.1.0-alpha.9 package.");
 }
-const root = new URL("../../../apps/prism-atlantic", import.meta.url).pathname;
+const root = fileURLToPath(new URL("../../../apps/prism-atlantic", import.meta.url));
 
 export default defineConfig({
   root,

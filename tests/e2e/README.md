@@ -116,12 +116,12 @@ stays unchanged. Use an isolated extraction of the registry archive and an
 installed Chrome for Testing 158.0.8115.0 macOS ARM64 executable:
 
 ```sh
-qualification_dir=$(mktemp -d)
-npm pack @synthesisengineering/prism@0.1.0-alpha.9 --ignore-scripts --pack-destination "$qualification_dir"
-echo "795413e00ce0e948411aa2367bb15967cd9ce28151eba3be8050aef81ec759a9  $qualification_dir/synthesisengineering-prism-0.1.0-alpha.9.tgz" | shasum -a 256 -c -
-tar -xzf "$qualification_dir/synthesisengineering-prism-0.1.0-alpha.9.tgz" -C "$qualification_dir"
-export PRISM_PUBLISHED_PACKAGE_DIR="$qualification_dir/package"
-export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="/absolute/path/to/Google Chrome for Testing"
+qualification_dir=$(mktemp -d) &&
+npm pack @synthesisengineering/prism@0.1.0-alpha.9 --ignore-scripts --pack-destination "$qualification_dir" &&
+echo "795413e00ce0e948411aa2367bb15967cd9ce28151eba3be8050aef81ec759a9  $qualification_dir/synthesisengineering-prism-0.1.0-alpha.9.tgz" | shasum -a 256 -c - &&
+tar -xzf "$qualification_dir/synthesisengineering-prism-0.1.0-alpha.9.tgz" -C "$qualification_dir" &&
+export PRISM_PUBLISHED_PACKAGE_DIR="$qualification_dir/package" &&
+export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="/absolute/path/to/Google Chrome for Testing" &&
 pnpm exec playwright test --config playwright.atlantic.config.ts
 ```
 
