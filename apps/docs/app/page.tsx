@@ -100,7 +100,7 @@ export default function HomePage() {
                 </Link>
               </div>
               <pre className="prism-install-cell">
-                <code>npm i @synthesisengineering/prism@0.1.0-alpha.8</code>
+                <code>npm i @synthesisengineering/prism@0.1.0-alpha.9</code>
               </pre>
             </div>
 

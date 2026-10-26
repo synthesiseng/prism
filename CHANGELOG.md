@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.1.0-alpha.9 — Unreleased
+## 0.1.0-alpha.9 — 2026-10-26
 
 ### Changed
 
@@ -26,4 +26,4 @@
 
 - Merged main `3297d09d2f3352786e506d35180492f89f887b12` passed [ordinary CI](https://github.com/synthesiseng/prism/actions/runs/40217890346) and [native qualification](https://github.com/synthesiseng/prism/actions/runs/40217890396): 154 unit tests, 5 fallback browser tests, packed consumers, 10 native lifecycle/layout tests and 10 raw-platform/Prism geometry, pixel and click scenarios. Native evidence covers Chrome for Testing 158.0.8115.0 on macOS ARM64 with `CanvasDrawElement` enabled and Chromium sandboxing enabled, including DPR 2, CSS scaling, transforms and relocation.
 - This is a bounded experimental configuration, not general browser support. Linux native qualification is not established; earlier Chrome for Testing 156 hit-testing failures remain disqualifying for that configuration. The fallback renders placeholders, not HTML snapshots. Image/export fidelity and drawable isolation remain use-case limitations.
-- Package metadata is prepared as `0.1.0-alpha.9`; the release remains unpublished. The hosted evidence above covers the merged runtime before this version and documentation change, not the versioned candidate. Final candidate verification, review disposition and publication approval remain separate steps.
+- Versioned main `315bc361fe90a9e97f34084db95c9b7c671cbda4` passed [ordinary CI](https://github.com/synthesiseng/prism/actions/runs/40227357197) and [native qualification](https://github.com/synthesiseng/prism/actions/runs/40227357208), including the alpha.9 packed consumers and default docs build. The [alpha.9 release](https://github.com/synthesiseng/prism/releases/tag/v0.1.0-alpha.9) is published on npm under the `alpha` tag; `latest` remains alpha.1. Independent review passed; CodeRabbit did not complete on PRs #73 and #74, and the owner accepted that review gap before publication.

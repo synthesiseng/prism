@@ -133,10 +133,10 @@ Do not use Prism just to draw static SVG/image assets. If the source is static a
 
 ## Install
 
-This guide describes unreleased alpha.9. The command below installs published alpha.8, which uses the earlier native path. Alpha.9 is not available on npm yet.
+Install the published alpha.9 package:
 
 ```sh
-pnpm add @synthesisengineering/prism@0.1.0-alpha.8
+pnpm add @synthesisengineering/prism@0.1.0-alpha.9
 ```
 
 ## Imports
