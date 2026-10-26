@@ -47,10 +47,10 @@ Your app owns the scene, drawing model, animation loop, and state. Prism owns th
 
 ## Installation
 
-This README describes the unreleased alpha.9 candidate. The command below installs published alpha.8, which uses the earlier native path. Alpha.9 is not available on npm yet.
+Install the published alpha.9 package:
 
 ```sh
-pnpm add @synthesisengineering/prism@0.1.0-alpha.8
+pnpm add @synthesisengineering/prism@0.1.0-alpha.9
 ```
 
 ## Agent Skill
@@ -254,7 +254,7 @@ API shapes are rejected in forced native mode; legacy users can pin alpha.8.
 passed for Chrome for Testing 158.0.8115.0 on macOS ARM64 with
 `CanvasDrawElement` and Chromium sandboxing enabled. This bounded experimental
 configuration does not establish Linux native qualification or general browser
-support. The fallback draws placeholders, not HTML. See the [unreleased notes](https://github.com/synthesiseng/prism/blob/main/CHANGELOG.md)
+support. The fallback draws placeholders, not HTML. See the [release notes](https://github.com/synthesiseng/prism/blob/main/CHANGELOG.md)
 for qualification limits and release status.
 Native `drawable` also creates isolation; synthetic tests show that some remote
 image content is omitted, so image/export fidelity must be checked per use case.
