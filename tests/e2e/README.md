@@ -107,3 +107,35 @@ backing store; retain the measured ratio when reporting qualification.
 
 These tests run against the configured native browser. Local results do not close
 the hosted PR qualification gate or qualify another browser/OS configuration.
+
+## Atlantic published-package qualification
+
+`playwright.atlantic.config.ts` serves the actual Atlantic app with the published
+alpha.9 package in place of its workspace import. The app's normal dependency
+stays unchanged. Use an isolated extraction of the registry archive and an
+installed Chrome for Testing 158.0.8115.0 macOS ARM64 executable:
+
+```sh
+qualification_dir=$(mktemp -d)
+npm pack @synthesisengineering/prism@0.1.0-alpha.9 --ignore-scripts --pack-destination "$qualification_dir"
+echo "795413e00ce0e948411aa2367bb15967cd9ce28151eba3be8050aef81ec759a9  $qualification_dir/synthesisengineering-prism-0.1.0-alpha.9.tgz" | shasum -a 256 -c -
+tar -xzf "$qualification_dir/synthesisengineering-prism-0.1.0-alpha.9.tgz" -C "$qualification_dir"
+export PRISM_PUBLISHED_PACKAGE_DIR="$qualification_dir/package"
+export PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH="/absolute/path/to/Google Chrome for Testing"
+pnpm exec playwright test --config playwright.atlantic.config.ts
+```
+
+Stop if the checksum fails. The tests check actual storm selection, legend
+hover/focus highlighting, panel clicks and closing, viewport resize, and downloaded
+PNG dimensions and current storm-title pixels. Atlantic has no draggable panel
+resize control. Separate assertions compare its visible dates and wind units with
+the committed data. A disabled-feature run checks the native-support gate; it does
+not claim that fallback placeholders compose HTML.
+
+The DPR 2 project also sets Chromium's physical device scale to 2. Context-only
+emulation can report `devicePixelRatio: 2` while `devicePixelContentBoxSize` still
+reports a 1× backing store. All projects keep sandboxing enabled. The initial
+panel-opening animation settles before export; switching storms in the open panel
+exports immediately after the update. PNGs and screenshots are saved as test
+artifacts. These are local consumer checks, not a new hosted gate or broader
+browser-support claim.
