@@ -107,6 +107,10 @@ function bindInteractions(): void {
   });
 
   canvas.addEventListener("click", (event) => {
+    // HTML surface controls bubble through the canvas, but are not chart selections.
+    if (event.target !== canvas) {
+      return;
+    }
     // Selection uses the same CSS-space hit testing as hover, which keeps
     // interaction stable across DPR and canvas resize changes.
     const point = runtime.clientToCanvasPoint(event.clientX, event.clientY);
