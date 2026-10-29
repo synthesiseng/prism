@@ -131,6 +131,8 @@ export function updateSurfaceBounds(
   const height = runtime.height;
   const tooltipSize = measure(surfaces.tooltip.element, 200, 90);
   const detailSize = measure(surfaces.detail.element, 300, 520);
+  const captionSize = measure(surfaces.caption.element, 250, 42);
+  const exportSize = measure(surfaces.exportButton.element, 132, 34, true);
 
   // Bounds are recomputed per paint because HTML content can change size
   // independently of the canvas chart. The values passed to Prism stay in CSS pixels.
@@ -148,16 +150,16 @@ export function updateSurfaceBounds(
     height: measure(surfaces.legend.element, 220, 235).height
   });
   surfaces.exportButton.setBounds({
-    x: width - 28 - measure(surfaces.exportButton.element, 132, 34).width,
+    x: width - 28 - exportSize.width,
     y: 28,
-    width: measure(surfaces.exportButton.element, 132, 34).width,
+    width: exportSize.width,
     height: 34
   });
   surfaces.caption.setBounds({
-    x: width - 28 - measure(surfaces.caption.element, 250, 42).width,
-    y: height - 28 - 42,
-    width: measure(surfaces.caption.element, 250, 42).width,
-    height: 42
+    x: width - 28 - captionSize.width,
+    y: height - 28 - captionSize.height,
+    width: captionSize.width,
+    height: captionSize.height
   });
 
   if (state.tooltipPoint) {
@@ -301,14 +303,22 @@ function centered(
 
 function measure(
   element: HTMLElement,
-  fallbackWidth: number,
-  fallbackHeight: number
+  width: number,
+  fallbackHeight: number,
+  contentSizedWidth = false
 ): Readonly<{ width: number; height: number }> {
-  // Registered surfaces are still live DOM nodes, so their intrinsic layout is
-  // available before Prism draws them. Fallbacks prevent zero-sized first paints.
+  // Prism owns the outer border box. Its previous height is not a content measurement.
+  const content = element.querySelector<HTMLElement>(":scope > .surface-content");
+  if (!content) throw new Error("Atlantic surfaces require an inner content wrapper.");
+  const style = getComputedStyle(element);
+  const vertical = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom) +
+    parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+  const horizontal = parseFloat(style.paddingLeft) + parseFloat(style.paddingRight) +
+    parseFloat(style.borderLeftWidth) + parseFloat(style.borderRightWidth);
   return {
-    width: Math.max(element.offsetWidth, fallbackWidth),
-    height: Math.max(element.offsetHeight, fallbackHeight)
+    // Block wrappers fill their assigned width. Only the export button measures inline content.
+    width: contentSizedWidth ? Math.max(content.scrollWidth + horizontal, width) : width,
+    height: Math.max(content.offsetHeight + vertical, fallbackHeight)
   };
 }
 

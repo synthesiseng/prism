@@ -10,3 +10,4 @@ export type {
 } from "./canvas-runtime";
 export type { CanvasSurface, SurfaceBoundsInput, SurfaceOptions } from "./surface";
 export { PrismNativeError } from "./native-error";
+export { LayoutConvergenceError } from "./layout-convergence-error";

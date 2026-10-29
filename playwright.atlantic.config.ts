@@ -1,8 +1,8 @@
 import { defineConfig } from "@playwright/test";
 
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
-if (!executablePath || !process.env.PRISM_PUBLISHED_PACKAGE_DIR) {
-  throw new Error("Set the installed browser path and extracted published Prism package directory.");
+if (!executablePath || !(process.env.PRISM_PACKAGE_DIR ?? process.env.PRISM_PUBLISHED_PACKAGE_DIR)) {
+  throw new Error("Set the installed browser path and extracted Prism package directory.");
 }
 
 export default defineConfig({

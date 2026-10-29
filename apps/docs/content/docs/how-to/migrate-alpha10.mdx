@@ -1,0 +1,55 @@
+---
+title: Migrating from alpha.8 to alpha.10
+description: Update surface sizing and layout recovery.
+---
+
+This guide covers the alpha.10 candidate. Keep alpha.9 installation instructions until the next package is published.
+
+## Measure content inside the surface
+
+**Breaking:** bounds own layout size as well as the drawing rectangle. Alpha.9 introduced width and height writes; alpha.10 makes those dimensions the border box with `box-sizing: border-box`.
+
+Do not measure the surface's `offsetHeight` to decide its next height. That reads the size Prism just assigned. Put the content in an auto-height wrapper instead:
+
+```html
+<section id="panel">
+  <div id="panel-content">Panel content</div>
+</section>
+```
+
+```css
+#panel-content {
+  display: flow-root;
+}
+```
+
+Measure the wrapper after changing content. Include the surface's padding and borders:
+
+```ts
+const style = getComputedStyle(panel);
+const vertical = parseFloat(style.paddingTop) + parseFloat(style.paddingBottom)
+  + parseFloat(style.borderTopWidth) + parseFloat(style.borderBottomWidth);
+
+surface.setBounds({
+  x: 28,
+  y: 28,
+  width: 280,
+  height: Math.max(content.offsetHeight + vertical, 180)
+});
+```
+
+The wrapper follows the assigned width and can grow or shrink in height. If a width change causes reflow, measure again on the next paint. Keep that calculation repeatable and let it settle. Prism preserves application transforms and restores `box-sizing`, width and height only while they still match its last writes.
+
+Literal bounds are copied at registration and `setBounds()`. Call `setBounds()` for updates, or pass a function provider when bounds should be read from application state. Mutating an earlier literal object no longer moves the surface.
+
+## Keep paint handlers convergent
+
+Four consecutive incomplete native layout passes stop with `LayoutConvergenceError`. Import `LayoutConvergenceError` from the package root to handle it with `instanceof`; it extends `Error`, not `PrismNativeError`. It does not mark native health failed. Waiting `paintOnce()` calls reject; without callers, the error reaches `reportError()`.
+
+Fix the layout, then call `setBounds()` or `invalidate()` outside paint to recover. Repeated calls inside paint cannot reset the limit. Further `paintOnce()` calls reject until that recovery trigger. A native deadline expiring during layout retry also stops its retries.
+
+A size change during paint still waits for a fresh browser snapshot. Drawing already performed is not rolled back, so an incomplete frame may be visible. A position change after drawing requests a following paint without layout preparation. Unchanged literal bounds do not schedule extra paints.
+
+## Check registration and cleanup
+
+Alpha.9 also made duplicate registration throw, including within the same runtime. Dispose or unregister the old surface before registering its element again. Application changes that differ from Prism's last write survive cleanup; an application write of the same value cannot be distinguished.

@@ -9,6 +9,9 @@ on:
       - packages/html-canvas/**
       - packages/core/**
       - packages/math/**
+      - apps/prism-atlantic/**
+      - scripts/check-package-readme.mjs
+      - scripts/prepare-package.mjs
       - tests/e2e/**
       - scripts/native-compatibility-spike.mjs
       - scripts/assert-native-result.mjs
@@ -25,6 +28,9 @@ on:
       - packages/html-canvas/**
       - packages/core/**
       - packages/math/**
+      - apps/prism-atlantic/**
+      - scripts/check-package-readme.mjs
+      - scripts/prepare-package.mjs
       - tests/e2e/**
       - scripts/native-compatibility-spike.mjs
       - scripts/assert-native-result.mjs
@@ -123,9 +129,66 @@ jobs:
           import assert from 'node:assert/strict';
           import {readFileSync} from 'node:fs';
           const report = JSON.parse(readFileSync(process.argv[2], 'utf8'));
-          assert.equal(report.stats.expected, 10, 'all ten native lifecycle and layout regression tests passed');
+          assert.equal(report.stats.expected, 11, 'all eleven native lifecycle and layout tests, including content shrink, passed');
           for (const field of ['unexpected', 'skipped', 'flaky']) assert.equal(report.stats[field], 0, field);
           assert.deepEqual(report.errors, [], 'no test runner errors');
+          NODE
+      - name: Pack the candidate for Atlantic
+        run: |
+          mkdir -p "$EVIDENCE/atlantic-package"
+          npm pack --json --pack-destination "$EVIDENCE/atlantic-package" > "$EVIDENCE/atlantic-package/pack.json"
+          archive=$(node --input-type=module - "$EVIDENCE/atlantic-package/pack.json" <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          import path from 'node:path';
+          const packs = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          assert.equal(packs.length, 1);
+          assert.equal(path.basename(packs[0].filename), packs[0].filename);
+          console.log(packs[0].filename);
+          NODE
+          )
+          shasum -a 256 "$EVIDENCE/atlantic-package/$archive" > "$EVIDENCE/atlantic-package/sha256.txt"
+          tar -xzf "$EVIDENCE/atlantic-package/$archive" -C "$EVIDENCE/atlantic-package"
+          node scripts/check-package-readme.mjs "$EVIDENCE/atlantic-package/package"
+          {
+            printf 'PRISM_PACKAGE_DIR=%s\n' "$EVIDENCE/atlantic-package/package"
+            printf 'PRISM_PACKAGE_VERSION=%s\n' "$(node -p 'require("./package.json").version')"
+            printf 'PRISM_PACKAGE_ORIGIN=candidate:%s\n' "$GITHUB_SHA"
+          } >> "$GITHUB_ENV"
+      - name: Require Atlantic candidate interactions and shrink
+        run: |
+          ATLANTIC_RESULTS_DIR="$EVIDENCE/atlantic-results" PLAYWRIGHT_JSON_OUTPUT_FILE="$EVIDENCE/atlantic.json" \
+            pnpm exec playwright test --config playwright.atlantic.config.ts --retries=0 --reporter=list,json 2>&1 | tee "$EVIDENCE/atlantic.log"
+          node --input-type=module - "$EVIDENCE/atlantic.json" <<'NODE'
+          import assert from 'node:assert/strict';
+          import {readFileSync} from 'node:fs';
+          const report = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          assert.equal(report.stats.expected, 7, 'six native Atlantic cases and the unsupported-browser gate passed');
+          assert.equal(report.stats.skipped, 5, 'only cross-project exclusions');
+          for (const field of ['unexpected', 'flaky']) assert.equal(report.stats[field], 0, field);
+          assert.deepEqual(report.errors, []);
+          const visit = suites => suites.flatMap(suite => [...(suite.specs ?? []), ...visit(suite.suites ?? [])]);
+          const specs = visit(report.suites);
+          const titles = [
+            'packaged Atlantic interaction, resize and current PNG export',
+            'visible dataset dates and wind units match the committed data',
+            'unsupported browser shows the native composition gate',
+            'Atlantic measures shrinking inner content instead of its previous surface height'
+          ];
+          const seen = new Set();
+          for (const spec of specs) for (const test of spec.tests) {
+            assert.ok(titles.includes(spec.title), 'known acceptance case');
+            const key = `${test.projectName}:${spec.title}`;
+            assert.ok(!seen.has(key), 'one result per case/project');
+            seen.add(key);
+            const unsupported = spec.title === 'unsupported browser shows the native composition gate';
+            assert.ok(['native-dpr1', 'native-dpr2', 'unsupported'].includes(test.projectName));
+            const runs = unsupported === (test.projectName === 'unsupported');
+            assert.equal(test.status, runs ? 'expected' : 'skipped');
+            assert.equal(test.results.length, 1);
+            assert.equal(test.results[0].status, runs ? 'passed' : 'skipped');
+          }
+          assert.equal(seen.size, 12, 'complete three-project/four-case matrix');
           NODE
       - name: Retain qualification evidence
         if: always()

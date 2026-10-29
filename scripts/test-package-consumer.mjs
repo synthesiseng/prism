@@ -1,3 +1,4 @@
+import { checkPackageReadme } from "./check-package-readme.mjs";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readdir, rm, writeFile } from "node:fs/promises";
@@ -23,6 +24,8 @@ try {
     packageRoot,
     "--strip-components=1"
   ]);
+  await checkPackageReadme(packageRoot);
+  console.log("Actual packed README: PASS");
   await writeFile(
     path.join(scratch, "package.json"),
     '{"private":true,"type":"module"}\n'
@@ -30,7 +33,7 @@ try {
   await writeFile(
     path.join(scratch, "consumer.ts"),
     `
-import { CanvasRuntime, PrismNativeError } from "@synthesisengineering/prism";
+import { CanvasRuntime, PrismNativeError, LayoutConvergenceError } from "@synthesisengineering/prism";
 import type { CanvasPoint, CanvasRuntimeOptions, PaintHandler } from "@synthesisengineering/prism";
 const point: CanvasPoint = { x: 1, y: 2 };
 const options: CanvasRuntimeOptions = { backend: "native", nativePaintTimeoutMs: 2000 };
@@ -42,7 +45,14 @@ const paint: PaintHandler = ({ drawSurface }) => drawSurface(surface);
 runtime.onPaint(paint);
 const pending: Promise<void> = runtime.paintOnce();
 const failure: Error = new PrismNativeError("paint-timeout", "synthetic consumer error");
-void pending; void failure;
+function describeFailure(error: unknown): string {
+  if (error instanceof LayoutConvergenceError) {
+    const narrowed: LayoutConvergenceError = error;
+    return narrowed.message;
+  }
+  return "other";
+}
+void pending; void failure; void describeFailure;
 // @ts-expect-error public coordinates must retain their numeric type
 const invalidPoint: CanvasPoint = { x: "invalid", y: 2 };
 // @ts-expect-error unsupported backend must not become any through unresolved declarations
@@ -95,9 +105,14 @@ void invalidPoint; void invalidOptions;
       "-e",
       `
     import assert from 'node:assert/strict';
-    import { CanvasRuntime, PrismNativeError } from '@synthesisengineering/prism';
+    import { CanvasRuntime, PrismNativeError, LayoutConvergenceError } from '@synthesisengineering/prism';
     assert.equal(typeof CanvasRuntime, 'function');
     assert.equal(typeof PrismNativeError, 'function');
+    const layout = new LayoutConvergenceError();
+    assert.ok(layout instanceof LayoutConvergenceError);
+    assert.ok(layout instanceof Error);
+    assert.equal(layout instanceof PrismNativeError, false);
+    assert.equal(layout.name, 'LayoutConvergenceError');
   `
     ],
     { cwd: scratch, stdio: "inherit" }

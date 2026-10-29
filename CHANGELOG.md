@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — alpha.10 candidate
+
+### Changed
+
+- **Breaking:** bounds own source layout size, introduced in alpha.9. Natural content must be measured through an inner wrapper rather than the sized surface's `offsetHeight`.
+- **Breaking:** bounds now describe the border box. Prism writes `box-sizing: border-box` under the same restore-if-unchanged rule as width and height. Padding and borders fit inside the drawing bounds; application CSS transforms remain application-owned.
+- **Breaking:** literal bounds objects are copied at registration and `setBounds()`. In-place mutations no longer update a surface; call `setBounds()` or supply a function provider for changing bounds.
+- Four consecutive incomplete native layout passes stop with `LayoutConvergenceError`. Pending callers reject, deferred interaction is cleaned up and self-scheduled retries stop. Native health retains the last platform outcome. Fix layout, then call `setBounds()` or `invalidate()` outside paint to recover; calls inside paint cannot reset the limit. A waiter timeout during layout retry also stops those retries.
+
+### Fixed
+
+- Atlantic measures an inner content wrapper, so panels can shrink after their content changes. Its design, controls and data snapshot are unchanged.
+- Repeating unchanged literal bounds no longer schedules fallback paints. Effective native position changes after drawing request a following paint without another layout snapshot.
+- Package preparation checks the README's pinned install version and rejects release-pending wording. Package-consumer verification checks the actual tarball README too. The intentional `latest` dist-tag policy is unchanged.
+
+### Qualification
+
+- The macOS native workflow includes content-shrink coverage and Atlantic against a packed candidate, alongside native lifecycle/layout and raw-platform/Prism pixel/click scenarios. It retains the pinned sandboxed Chrome for Testing configuration. Local candidate validation does not establish a hosted run or broader browser support.
+- See the [alpha.8 → alpha.10 migration note](https://runprism.dev/docs/how-to/migrate-alpha10). No alpha.10 version or release is created by this change.
+
 ## 0.1.0-alpha.9 — 2026-10-26
 
 ### Changed

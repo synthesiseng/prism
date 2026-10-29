@@ -1,3 +1,4 @@
+import { LayoutConvergenceError } from "./index";
 import { PrismNativeError } from "./native-error";
 import { describe, expect, it, beforeEach, afterEach, vi } from "vitest";
 import { CanvasRuntime } from "./canvas-runtime";
@@ -385,6 +386,163 @@ describe("CanvasRuntime", () => {
       const element = document.createElement("section");
       return { canvas, runtime, element };
     }
+
+    it("owns the border box and conditionally restores app box sizing", () => {
+      const { runtime, element } = create();
+      element.style.setProperty("box-sizing", "content-box", "important");
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 120, height: 80 } });
+      try {
+        expect(element.style.getPropertyValue("box-sizing")).toBe("border-box");
+        surface.dispose();
+        expect(element.style.getPropertyValue("box-sizing")).toBe("content-box");
+        expect(element.style.getPropertyPriority("box-sizing")).toBe("important");
+        runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 120, height: 80 } });
+        element.style.setProperty("box-sizing", "content-box");
+      } finally { runtime.destroy(); }
+      expect(element.style.getPropertyValue("box-sizing")).toBe("content-box");
+      expect(element.style.getPropertyPriority("box-sizing")).toBe("");
+    });
+
+    it("requests a following native pass only for movement not consumed by a draw", async () => {
+      const { runtime, canvas, element } = create();
+      const bounds = { x: 0, y: 0, width: 120, height: 80 };
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds });
+      let phase = 0;
+      runtime.onPaint(({ drawSurface }) => {
+        drawSurface(surface);
+        if (phase === 0) surface.setBounds({ ...bounds, x: 220 });
+        if (phase === 2) { surface.setBounds({ ...bounds, x: 320 }); drawSurface(surface); }
+      });
+      try {
+        const paint = runtime.paintOnce();
+        const before = canvas.requestPaintCount;
+        canvas.dispatchEvent(new Event("paint"));
+        await paint;
+        expect(canvas.requestPaintCount).toBe(before + 1);
+        phase = 1;
+        canvas.dispatchEvent(new Event("paint"));
+        expect(canvas.requestPaintCount).toBe(before + 1);
+        phase = 2;
+        const next = runtime.paintOnce();
+        const requested = canvas.requestPaintCount;
+        canvas.dispatchEvent(new Event("paint")); await next;
+        expect(canvas.requestPaintCount).toBe(requested);
+      } finally { runtime.destroy(); }
+    });
+
+    it.each([false, true])("bounds layout retries stop at four despite internal invalidation: waiter=%s", async (waiting) => {
+      vi.useFakeTimers();
+      const { runtime, canvas, element } = create(1000);
+      const report = vi.fn(); vi.stubGlobal("reportError", report);
+      const bounds = { x: 0, y: 0, width: 120, height: 80 };
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds });
+      let unstable = false, passes = 0;
+      runtime.onPaint(({ drawSurface, invalidate }) => {
+        passes++;
+        if (unstable) {
+          surface.setBounds({ ...bounds, width: passes % 2 ? 140 : 160 });
+          invalidate();
+        }
+        drawSurface(surface);
+      });
+      let rejection: unknown, settled = false;
+      try {
+        const first = runtime.paintOnce(); canvas.dispatchEvent(new Event("paint")); await first;
+        const prior = runtime.diagnostics;
+        unstable = true;
+        if (waiting) void runtime.paintOnce().catch((error: unknown) => { rejection = error; settled = true; });
+        else runtime.invalidate();
+        for (let i = 0; i < 4; i++) { canvas.dispatchEvent(new Event("paint")); await Promise.resolve(); }
+        if (waiting) { expect(settled).toBe(true); expect(rejection).toMatchObject({ name: "LayoutConvergenceError" }); }
+        else { expect(report).toHaveBeenCalledTimes(1); rejection = report.mock.calls[0]?.[0]; }
+        expect(rejection).toBeInstanceOf(LayoutConvergenceError);
+        expect(rejection).not.toBeInstanceOf(PrismNativeError);
+        expect(runtime.diagnostics).toEqual(prior);
+        expect(element.inert).toBe(true);
+        const stopped = passes, requests = canvas.requestPaintCount;
+        canvas.dispatchEvent(new Event("paint")); await Promise.resolve();
+        expect(passes).toBe(stopped);
+        expect(canvas.requestPaintCount).toBe(requests);
+        expect(vi.getTimerCount()).toBe(0);
+        await expect(runtime.paintOnce()).rejects.toBe(rejection);
+        unstable = false;
+        // Explicit external same-bounds recovery is allowed even when normal no-ops do not repaint.
+        surface.setBounds(surface.getBounds());
+        const recovered = runtime.paintOnce();
+        canvas.dispatchEvent(new Event("paint")); await recovered;
+        expect(runtime.diagnostics.health).toBe("healthy");
+        expect(element.inert).toBe(false);
+      } finally { runtime.destroy(); vi.useRealTimers(); }
+    });
+
+    it("rejects coalesced and reentrant episode callers and cannot recover from preparation or cleanup callbacks", async () => {
+      const { runtime, canvas, element } = create(1000);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 120, height: 80 } });
+      let unstable = false, passes = 0;
+      let nested: Promise<unknown> | undefined;
+      runtime.onPaint(({ drawSurface }) => {
+        passes++;
+        if (unstable) {
+          surface.setBounds({ x: 0, y: 0, width: passes % 2 ? 140 : 160, height: 80 });
+          nested ??= runtime.paintOnce().catch((error: unknown) => error);
+        }
+        drawSurface(surface);
+      });
+      const write = element.style.setProperty.bind(element.style);
+      try {
+        const first = runtime.paintOnce(); canvas.dispatchEvent(new Event("paint")); await first;
+        vi.spyOn(element.style, "setProperty").mockImplementation((name, value, priority) => {
+          write(name, value, priority);
+          if (name === "width" || name === "pointer-events") runtime.invalidate();
+        });
+        unstable = true;
+        const one = runtime.paintOnce().catch((error: unknown) => error);
+        const two = runtime.paintOnce().catch((error: unknown) => error);
+        for (let i = 0; i < 4; i++) { canvas.dispatchEvent(new Event("paint")); await Promise.resolve(); }
+        const error = await one;
+        expect(error).toBeInstanceOf(LayoutConvergenceError);
+        expect(await two).toBe(error); expect(await nested).toBe(error);
+        const stopped = passes;
+        canvas.dispatchEvent(new Event("paint")); await Promise.resolve();
+        expect(passes).toBe(stopped);
+        unstable = false; runtime.invalidate();
+        const recovered = runtime.paintOnce(); canvas.dispatchEvent(new Event("paint")); await recovered;
+        // Reactivation's application callback requests a legitimate next pass.
+        expect(runtime.diagnostics.health).toBe("pending");
+        canvas.dispatchEvent(new Event("paint"));
+        expect(runtime.diagnostics.health).toBe("healthy");
+      } finally { runtime.destroy(); }
+    });
+
+    it("stops a timed-out layout episode and ignores late paints until external recovery", async () => {
+      vi.useFakeTimers();
+      const { runtime, canvas, element } = create(50);
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds: { x: 0, y: 0, width: 120, height: 80 } });
+      let resize = false, passes = 0;
+      runtime.onPaint(({ drawSurface }) => {
+        passes++;
+        if (resize) surface.setBounds({ x: 0, y: 0, width: 300, height: 80 });
+        drawSurface(surface);
+      });
+      try {
+        const initial = runtime.paintOnce(); canvas.dispatchEvent(new Event("paint")); await initial;
+        resize = true;
+        const failed = runtime.paintOnce().catch((error: unknown) => error);
+        canvas.dispatchEvent(new Event("paint")); await Promise.resolve();
+        await vi.advanceTimersByTimeAsync(50);
+        const error = await failed;
+        expect(error).toBeInstanceOf(PrismNativeError);
+        expect(error).toMatchObject({ code: "paint-timeout" });
+        const stopped = passes, requested = canvas.requestPaintCount;
+        canvas.dispatchEvent(new Event("paint")); await Promise.resolve();
+        expect(passes).toBe(stopped); expect(canvas.requestPaintCount).toBe(requested);
+        expect(runtime.diagnostics.health).toBe("failed");
+        expect(vi.getTimerCount()).toBe(0);
+        runtime.invalidate();
+        const recovered = runtime.paintOnce(); canvas.dispatchEvent(new Event("paint")); await recovered;
+        expect(runtime.diagnostics.health).toBe("healthy");
+      } finally { runtime.destroy(); vi.useRealTimers(); }
+    });
 
     it.each([
       [false, "propagate"], [true, "propagate"],
@@ -2260,6 +2418,26 @@ describe("CanvasRuntime", () => {
   });
 
   describe("fallback repaint scheduling", () => {
+    it("does not repaint unchanged literal bounds and snapshots mutable inputs", async () => {
+      const raf = new ManualRaf();
+      vi.stubGlobal("requestAnimationFrame", raf.request); vi.stubGlobal("cancelAnimationFrame", raf.cancel);
+      const canvas = new FakeCanvas(false); canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement, { backend: "fallback" });
+      const element = document.createElement("section");
+      const bounds = { x: 0, y: 0, width: 120, height: 80 };
+      const surface = runtime.registerSurface(element as unknown as HTMLElement, { bounds });
+      let passes = 0;
+      runtime.onPaint(({ drawSurface }) => { passes++; surface.setBounds(bounds); drawSurface(surface); });
+      try {
+        await runtime.paintOnce(); runtime.start();
+        for (let i = 0; i < 10; i++) raf.step(16 * (i + 1));
+        expect(passes).toBe(1);
+        bounds.x = 40; surface.setBounds(bounds);
+        raf.step(200); expect(passes).toBe(2);
+        raf.step(216); expect(passes).toBe(2);
+      } finally { runtime.destroy(); }
+    });
+
     it.each(["frame", "paintOnce"] as const)(
       "preserves fallback in-paint bounds invalidation after a %s pass",
       async (origin) => {

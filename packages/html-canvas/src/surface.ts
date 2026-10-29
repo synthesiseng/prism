@@ -19,7 +19,7 @@ export type SurfaceOptions = Readonly<{
    * Initial surface bounds in runtime CSS pixels.
    *
    * @remarks
-   * Width and height also size the native source's CSS layout before painting.
+   * Width and height size the source's border box before painting.
    * Use `CanvasSurface.setBounds()` after registration when bounds change.
    */
   bounds: SurfaceBoundsInput;
@@ -31,9 +31,11 @@ export type SurfaceOptions = Readonly<{
 }>;
 
 type SurfaceLifecycle = Readonly<{
-  invalidate(bounds: RectLike): void;
+  invalidate(bounds: RectLike, changed: boolean): void;
   unregister(surface: CanvasSurface): void;
 }>;
+
+const boundsRevisions = new WeakMap<CanvasSurface, number>();
 
 const surfaceLifecycles = new WeakMap<CanvasSurface, SurfaceLifecycle>();
 
@@ -66,7 +68,7 @@ export class CanvasSurface {
    */
   constructor(element: HTMLElement, options: SurfaceOptions) {
     this.element = element;
-    this.boundsInput = options.bounds;
+    this.boundsInput = typeof options.bounds === "function" ? options.bounds : { ...options.bounds };
 
     if (options.ariaLabel) {
       writeSurfaceAttribute(this.element, "aria-label", options.ariaLabel);
@@ -108,7 +110,9 @@ export class CanvasSurface {
    * during painting. Native width and height are applied before the browser
    * snapshot. Changing size during a paint pass defers drawing to a later pass;
    * it does not change the snapshot already being painted. Calling this outside
-   * an active paint pass schedules a runtime repaint.
+   * an active paint pass schedules a runtime repaint when the values change.
+   * Repeating literal values is a no-op, except for external recovery after a
+   * stopped layout episode.
    *
    * @param bounds - New surface bounds in runtime CSS pixels.
    *
@@ -119,8 +123,14 @@ export class CanvasSurface {
       throw new Error("Cannot update bounds on a disposed Prism canvas surface.");
     }
 
-    this.boundsInput = bounds;
-    surfaceLifecycles.get(this)?.invalidate(bounds);
+    const previous = this.boundsInput;
+    const next = { x: bounds.x, y: bounds.y, width: bounds.width, height: bounds.height };
+    // Do not call application bounds providers merely to compare an update.
+    const changed = typeof previous === "function" || previous.x !== next.x ||
+      previous.y !== next.y || previous.width !== next.width || previous.height !== next.height;
+    this.boundsInput = next;
+    if (changed) boundsRevisions.set(this, getSurfaceBoundsRevision(this) + 1);
+    surfaceLifecycles.get(this)?.invalidate(next, changed);
   }
 
   /**
@@ -149,4 +159,9 @@ export function setSurfaceLifecycle(
   lifecycle: SurfaceLifecycle
 ): void {
   surfaceLifecycles.set(surface, lifecycle);
+}
+
+/** Internal paint-pass revision; not part of the package's public exports. */
+export function getSurfaceBoundsRevision(surface: CanvasSurface): number {
+  return boundsRevisions.get(surface) ?? 0;
 }

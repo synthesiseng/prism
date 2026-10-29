@@ -4,7 +4,7 @@ import type { Rect } from "@prism/math";
 import type { RuntimeBackend } from "../backend";
 import type { HtmlCanvasContext2D } from "../experimental-types";
 import type { CanvasMetrics } from "../hidpi";
-import type { CanvasSurface } from "../surface";
+import { getSurfaceBoundsRevision, type CanvasSurface } from "../surface";
 import { cssRectToCanvasPixels } from "./coordinates";
 import { activateSurface, deactivateSurface } from "./surface-activation";
 import type { SurfaceRegistry } from "./surface-registry";
@@ -50,6 +50,7 @@ export function flushPaintPass(options: PaintPassOptions): boolean {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   const native = backend.usesNativePaintEvent;
   const drawn = new Set<CanvasSurface>();
+  const drawnRevisions = new Map<CanvasSurface, number>();
   const deferred = new Set<CanvasSurface>();
   if (!native) surfaces.forEachSurface(deactivateSurface);
 
@@ -65,6 +66,7 @@ export function flushPaintPass(options: PaintPassOptions): boolean {
       deferred.add(surface);
       return;
     }
+    const revision = getSurfaceBoundsRevision(surface);
     const pixelBounds = cssRectToCanvasPixels(canvas, metrics, cssBounds);
     try {
       backend.render(
@@ -84,6 +86,7 @@ export function flushPaintPass(options: PaintPassOptions): boolean {
     surfaces.setLayoutDeferred(surface, false);
     activateSurface(surface);
     drawn.add(surface);
+    drawnRevisions.set(surface, revision);
   };
 
   let failure: { error: unknown } | undefined;
@@ -116,6 +119,9 @@ export function flushPaintPass(options: PaintPassOptions): boolean {
     }
   }
   if (failure) throw failure.error;
+  if (native && !surfaces.hasPendingLayout && [...drawnRevisions].some(
+    ([surface, revision]) => !surface.isDisposed && getSurfaceBoundsRevision(surface) !== revision
+  )) invalidate();
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- drawSurface can mark the pass incomplete from a handler callback.
   return complete && !surfaces.hasPendingLayout;
 }
@@ -125,6 +131,9 @@ function syncSurfaceElement(
   transform: DOMMatrix,
   bounds: Rect
 ): void {
+  if (surface.isDisposed) return;
+  writeSurfaceStyle(surface.element, "box-sizing", "border-box");
+  // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Style callbacks can dispose synchronously.
   if (surface.isDisposed) return;
   writeSurfaceStyle(surface.element, "width", `${String(bounds.width)}px`);
   // eslint-disable-next-line @typescript-eslint/no-unnecessary-condition -- Style callbacks can dispose the surface synchronously.

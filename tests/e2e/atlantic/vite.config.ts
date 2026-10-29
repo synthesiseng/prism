@@ -3,13 +3,13 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vite";
 
-const packageDirectory = process.env.PRISM_PUBLISHED_PACKAGE_DIR;
+const packageDirectory = (process.env.PRISM_PACKAGE_DIR ?? process.env.PRISM_PUBLISHED_PACKAGE_DIR);
 if (!packageDirectory || !path.isAbsolute(packageDirectory)) {
-  throw new Error("PRISM_PUBLISHED_PACKAGE_DIR must be an absolute extracted package directory.");
+  throw new Error("PRISM_PACKAGE_DIR must be an absolute extracted package directory.");
 }
 const metadata = JSON.parse(readFileSync(path.join(packageDirectory, "package.json"), "utf8")) as { name: string; version: string };
-if (metadata.name !== "@synthesisengineering/prism" || metadata.version !== "0.1.0-alpha.9") {
-  throw new Error("Atlantic qualification requires the published Prism 0.1.0-alpha.9 package.");
+if (metadata.name !== "@synthesisengineering/prism" || metadata.version !== (process.env.PRISM_PACKAGE_VERSION ?? "0.1.0-alpha.9")) {
+  throw new Error("Atlantic qualification requires the explicitly selected Prism package version.");
 }
 const root = fileURLToPath(new URL("../../../apps/prism-atlantic", import.meta.url));
 

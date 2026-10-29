@@ -50,11 +50,12 @@
     "e2e": "playwright test",
     "e2e:native": "playwright test --config playwright.native.config.ts",
     "test": "vitest run",
-    "test:package": "node scripts/test-package-consumer.mjs",
+    "test:package": "node --test scripts/check-package-readme.test.mjs && node scripts/test-package-consumer.mjs",
     "lint": "pnpm --filter @prism/docs source && eslint .",
     "typecheck": "tsc -b tsconfig.build.json",
     "format": "prettier --write .",
-    "prepack": "pnpm build && node scripts/prepare-package.mjs"
+    "prepack": "node scripts/check-package-readme.mjs && pnpm build && node scripts/prepare-package.mjs",
+    "prepublishOnly": "pnpm test:package"
   },
   "devDependencies": {
     "@eslint/js": "^9.18.0",

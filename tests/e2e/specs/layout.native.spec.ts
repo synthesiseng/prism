@@ -78,3 +78,26 @@ for (const scenario of [
     });
   });
 }
+
+
+test("content shrinks independently of prior bounds and padding stays inside the border box", async ({ page }) => {
+  await page.goto("/layout.html");
+  try {
+    await page.evaluate(() => window.prismLayoutFixture.setup({ dynamic: false, scale: 1, transform: false }));
+    const result = await page.evaluate(() => window.prismLayoutFixture.shrink());
+    expect(result.longContent).toBe(700);
+    expect(result.grown.height).toBe(700);
+    expect(result.shortContent).toBe(20);
+    expect(result.shrunk.height).toBe(180);
+    expect(result.shrunk.firstDraw?.height).toBe(180);
+    expect(result.shrunk.firstDraw?.pixels).not.toBeNull();
+    await page.mouse.click(result.shrunk.clickPoint.x, result.shrunk.clickPoint.y);
+    expect((await page.evaluate(() => window.prismLayoutFixture.measure())).clicks).toBe(1);
+    await page.evaluate(() => window.prismLayoutFixture.dispose(false));
+    await page.evaluate(() => window.prismLayoutFixture.setup({ dynamic: false, scale: 1, transform: false }));
+    const box = await page.evaluate(() => window.prismLayoutFixture.borderBox());
+    expect(box.boxSizing).toBe("border-box");
+    expect(box.width).toBe(120); expect(box.height).toBe(80);
+    expect(box.firstDraw?.width).toBe(120); expect(box.firstDraw?.height).toBe(80);
+  } finally { await page.evaluate(() => window.prismLayoutFixture.dispose(false)); }
+});

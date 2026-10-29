@@ -108,10 +108,10 @@ backing store; retain the measured ratio when reporting qualification.
 These tests run against the configured native browser. Local results do not close
 the hosted PR qualification gate or qualify another browser/OS configuration.
 
-## Atlantic published-package qualification
+## Atlantic package qualification
 
-`playwright.atlantic.config.ts` serves the actual Atlantic app with the published
-alpha.9 package in place of its workspace import. The app's normal dependency
+`playwright.atlantic.config.ts` serves the actual Atlantic app with an extracted
+package in place of its workspace import. The app's normal dependency
 stays unchanged. Use an isolated extraction of the registry archive and an
 installed Chrome for Testing 158.0.8115.0 macOS ARM64 executable:
 
@@ -137,5 +137,16 @@ emulation can report `devicePixelRatio: 2` while `devicePixelContentBoxSize` sti
 reports a 1× backing store. All projects keep sandboxing enabled. The initial
 panel-opening animation settles before export; switching storms in the open panel
 exports immediately after the update. PNGs and screenshots are saved as test
-artifacts. These are local consumer checks, not a new hosted gate or broader
-browser-support claim.
+artifacts. The macOS native qualification job runs these cases against its own
+packed candidate, identified by source SHA, archive checksum and loaded module
+paths. It runs the native journeys and content-shrink case at DPR 1 and 2, plus
+the disabled-feature gate. The native fixture suite also checks 700px-to-20px
+content shrink and border-box padding. This is the pinned sandboxed macOS/CfT
+configuration only, not broader browser support. Workflow changes require a hosted
+run before claiming hosted qualification for a candidate.
+
+For local candidate checks, pack and extract the checkout, then set
+`PRISM_PACKAGE_DIR` to that extraction, `PRISM_PACKAGE_VERSION` to its version and
+`PRISM_PACKAGE_ORIGIN` to a candidate identity. The older
+`PRISM_PUBLISHED_PACKAGE_DIR` variable remains supported for the published alpha.9
+command above. Do not label a locally built candidate as the registry artifact.

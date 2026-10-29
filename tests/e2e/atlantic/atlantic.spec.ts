@@ -43,7 +43,7 @@ function target(name: string, width = 1440, height = 1000) {
   return { storm, point };
 }
 
-test("published Atlantic interaction, resize and current PNG export", async ({ page, browser }, info) => {
+test("packaged Atlantic interaction, resize and current PNG export", async ({ page, browser }, info) => {
   test.skip(info.project.name === "unsupported", "Native journey uses the enabled platform configuration.");
   const errors: string[] = [];
   page.on("pageerror", error => errors.push(String(error)));
@@ -55,7 +55,7 @@ test("published Atlantic interaction, resize and current PNG export", async ({ p
   await expect(page.locator("#native-gate")).toBeHidden();
   await frames(page);
   expect(responses.length).toBeGreaterThan(0);
-  const publishedModule = path.join(process.env.PRISM_PUBLISHED_PACKAGE_DIR!, "packages/html-canvas/dist/index.js").replaceAll("\\", "/");
+  const publishedModule = path.join((process.env.PRISM_PACKAGE_DIR ?? process.env.PRISM_PUBLISHED_PACKAGE_DIR)!, "packages/html-canvas/dist/index.js").replaceAll("\\", "/");
   const expectedModulePath = `/@fs/${publishedModule.replace(/^\//, "")}`;
   for (const url of responses) {
     expect(decodeURIComponent(new URL(url).pathname)).toBe(expectedModulePath);
@@ -168,7 +168,7 @@ test("published Atlantic interaction, resize and current PNG export", async ({ p
   await page.locator("#panel-x").click();
   await expect(page.locator("#panel")).toHaveAttribute("aria-hidden", "true");
   expect(errors).toEqual([]);
-  await writeFile(info.outputPath("identity.json"), JSON.stringify({ browser: browser.version(), packageVersion: "0.1.0-alpha.9", loadedModuleUrls: responses, dpr: info.project.use.deviceScaleFactor, errors }, null, 2));
+  await writeFile(info.outputPath("identity.json"), JSON.stringify({ browser: browser.version(), packageVersion: process.env.PRISM_PACKAGE_VERSION ?? "0.1.0-alpha.9", packageOrigin: process.env.PRISM_PACKAGE_ORIGIN ?? "published", loadedModuleUrls: responses, dpr: info.project.use.deviceScaleFactor, errors }, null, 2));
 });
 
 
@@ -196,4 +196,54 @@ test("unsupported browser shows the native composition gate", async ({ page }, i
   await expect(page.locator("#viz")).not.toHaveAttribute("content", "drawable");
   await page.screenshot({ path: info.outputPath("unsupported.png") });
   expect(errors).toEqual([]);
+});
+
+test("Atlantic measures shrinking inner content instead of its previous surface height", async ({ page }, info) => {
+  test.skip(info.project.name === "unsupported", "Native sizing requires the platform feature.");
+  const errors: string[] = [];
+  page.on("pageerror", error => errors.push(String(error)));
+  await page.goto("/");
+  await expect(page.locator("#native-gate")).toBeHidden();
+  const size = () => page.locator("#metric").evaluate(element => ({
+    outer: element.getBoundingClientRect().height,
+    content: element.querySelector<HTMLElement>(":scope > .surface-content")!.offsetHeight,
+    width: element.getBoundingClientRect().width
+  }));
+  await page.locator("#metric > .surface-content").evaluate(element => {
+    element.replaceChildren();
+    const text = document.createElement("div");
+    text.style.cssText = "font:16px/20px monospace;white-space:pre";
+    text.textContent = Array.from({ length: 35 }, () => "line").join("\n");
+    element.append(text);
+  });
+  // A real existing app event invalidates the composition after the content edit.
+  await page.setViewportSize({ width: 1441, height: 1000 });
+  await expect.poll(async () => (await size()).content).toBe(700);
+  await expect.poll(async () => (await size()).outer).toBe(728);
+  const grown = await size();
+  await page.locator("#metric > .surface-content > div").evaluate(element => { element.textContent = "line"; });
+  await page.setViewportSize({ width: 1440, height: 1000 });
+  await expect.poll(async () => (await size()).content).toBe(20);
+  await expect.poll(async () => (await size()).outer).toBe(180);
+  const shrunk = await size();
+  expect(shrunk.width).toBe(280);
+  const downloaded = page.waitForEvent("download");
+  await page.locator("#export").click();
+  const file = info.outputPath("shrunk-export.png");
+  await (await downloaded).saveAs(file);
+  const png = await readFile(file);
+  expect(png.readUInt32BE(16)).toBe(1440 * (info.project.use.deviceScaleFactor ?? 1));
+  await frames(page);
+  const region = { x: 28, y: 28, width: 280, height: 180 };
+  expect((await pixels(page, png, region)).hash).toBe((await pixels(page, await canvasPng(page), region)).hash);
+  expect(errors).toEqual([]);
+  // Block wrappers fill the assigned width; they must not feed that width back as natural size.
+  await page.locator("#caption").evaluate(element => { element.style.width = "500px"; });
+  await page.setViewportSize({ width: 1439, height: 1000 });
+  await expect.poll(() => page.locator("#caption").evaluate((element: HTMLElement) => element.offsetWidth)).toBe(250);
+  await page.setViewportSize({ width: 1200, height: 850 });
+  await frames(page);
+  expect(await page.locator("#brand").evaluate((element: HTMLElement) => element.offsetWidth)).toBe(430);
+  expect(await page.locator("#caption").evaluate((element: HTMLElement) => element.offsetWidth)).toBe(250);
+  await writeFile(info.outputPath("shrink.json"), JSON.stringify({ grown, shrunk, errors }));
 });

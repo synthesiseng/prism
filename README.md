@@ -200,26 +200,35 @@ Returned by `registerSurface()`. Do not construct directly.
 ## Native lifecycle
 
 The current native path uses canvas `content="drawable"` and surface `drawable`.
-Surface bounds set the native source's CSS width and height as well as its drawing
-rectangle. The browser synchronizes native input geometry; application CSS
+Surface bounds describe the border box in CSS pixels. Prism writes `box-sizing: border-box`, width and height as well as the drawing rectangle. The browser synchronizes native input geometry; application CSS
 transforms are preserved.
 
 Prism applies layout sizing before the browser snapshot. A size change made inside
 `onPaint()` defers drawing until a subsequent paint has the new layout; `paintOnce()`
 remains pending until that pass completes. Function-based bounds are still evaluated
 when `drawSurface()` is called, so their first attempted paint can also be deferred.
-Retries share the original visible-time timeout budget. Keep paint handlers
+Retries share the original visible-time timeout budget. Four consecutive incomplete
+layout passes stop the episode with `LayoutConvergenceError`, not
+`PrismNativeError`. Pending callers reject; native health keeps its last platform
+outcome. Fix the layout, then call `setBounds()` or `invalidate()` outside paint to
+recover. Calls inside paint do not reset the limit. Until recovery, `paintOnce()`
+rejects with the same error. A timeout during layout retry also stops further retries. Keep paint handlers
 repeatable: a deferred pass can invoke them again, and drawing already performed
 in an incomplete pass is not rolled back.
 Application CSS transforms are preserved. Prism never compensates for a browser
 hit-testing failure by rewriting transforms or pointer coordinates.
+
+Prism owns the outer size, so measure an auto-height inner wrapper instead of the
+surface's `offsetHeight`. Add the surface's padding and borders to the measured
+content height. Unchanged bounds do not request a repaint; a position change made
+after drawing requests the next pass. See the [alpha.8 → alpha.10 migration note](https://runprism.dev/docs/how-to/migrate-alpha10).
 
 A canvas has one live runtime, and an element has one active surface within this
 module instance. Duplicate registration throws, including within the same runtime.
 Dispose or unregister before registering an element again. On release, Prism restores
 an initial attribute or style property only if its current value still matches
 Prism's last write. Application changes to other values survive cleanup, including
-CSS transforms. This also applies to each per-frame `pointer-events` and `inert`
+CSS transforms and `box-sizing`. This also applies to each per-frame `pointer-events` and `inert`
 write. If an application writes exactly Prism's value, that write is indistinguishable
 and cleanup restores the initial value. DOM parent placement is restored as before.
 
