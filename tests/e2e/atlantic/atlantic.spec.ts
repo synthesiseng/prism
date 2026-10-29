@@ -9,8 +9,24 @@ const frames = (page: Page) => page.evaluate(() => new Promise<void>(resolve => 
   requestAnimationFrame(step);
 }));
 
-async function canvasPng(page: Page): Promise<Buffer> {
-  return Buffer.from(await page.locator("#viz").evaluate((canvas: HTMLCanvasElement) => canvas.toDataURL().split(",")[1]!), "base64");
+async function canvasPixels(page: Page, box: { x: number; y: number; width: number; height: number }) {
+  return page.locator("#viz").evaluate(async (source: HTMLCanvasElement, box) => {
+    // Keep PNG snapshot semantics without transferring the image to Node and back.
+    const image = await createImageBitmap(await (await fetch(source.toDataURL())).blob());
+    const canvas = document.createElement("canvas");
+    canvas.width = image.width; canvas.height = image.height;
+    const ctx = canvas.getContext("2d")!;
+    ctx.drawImage(image, 0, 0);
+    const ratio = devicePixelRatio;
+    const rgba = ctx.getImageData(Math.round(box.x * ratio), Math.round(box.y * ratio), Math.round(box.width * ratio), Math.round(box.height * ratio)).data;
+    const digest = await crypto.subtle.digest("SHA-256", rgba);
+    const result = {
+      hash: Array.from(new Uint8Array(digest), value => value.toString(16).padStart(2, "0")).join(""),
+      bright: rgba.some((value, index) => index % 4 !== 3 && value > 160)
+    };
+    image.close();
+    return result;
+  }, box);
 }
 
 async function pixels(page: Page, png: Buffer, box: { x: number; y: number; width: number; height: number }) {
@@ -66,20 +82,20 @@ test("packaged Atlantic interaction, resize and current PNG export", async ({ pa
   await page.mouse.move(1420, 980);
   await frames(page);
   const chartBox = { x: 400, y: 250, width: 500, height: 400 };
-  const unfiltered = await pixels(page, await canvasPng(page), chartBox);
+  const unfiltered = await canvasPixels(page, chartBox);
   await page.locator('#legend [data-cat="5"]').hover();
   await frames(page);
-  expect((await pixels(page, await canvasPng(page), chartBox)).hash === unfiltered.hash).toBe(false);
+  expect((await canvasPixels(page, chartBox)).hash === unfiltered.hash).toBe(false);
   await page.mouse.move(1420, 980);
   await frames(page);
-  expect((await pixels(page, await canvasPng(page), chartBox)).hash === unfiltered.hash).toBe(true);
+  expect((await canvasPixels(page, chartBox)).hash === unfiltered.hash).toBe(true);
   await page.locator('#legend [data-cat="4"]').focus();
   await frames(page);
-  expect((await pixels(page, await canvasPng(page), chartBox)).hash === unfiltered.hash).toBe(false);
+  expect((await canvasPixels(page, chartBox)).hash === unfiltered.hash).toBe(false);
   await page.keyboard.press("Tab");
   await page.locator("#export").focus();
   await frames(page);
-  expect((await pixels(page, await canvasPng(page), chartBox)).hash).toBe(unfiltered.hash);
+  expect((await canvasPixels(page, chartBox)).hash).toBe(unfiltered.hash);
 
   const names = ["Alberto", "Gordon"];
   const exports: Buffer[] = [];
@@ -114,7 +130,7 @@ test("packaged Atlantic interaction, resize and current PNG export", async ({ pa
     const title = await page.locator("#p-name").boundingBox();
     expect(title).not.toBeNull();
     const exported = await pixels(page, png, title!);
-    const settled = await pixels(page, await canvasPng(page), title!);
+    const settled = await canvasPixels(page, title!);
     expect(exported.hash === settled.hash, "exported title matches current settled title pixels").toBe(true);
     expect(exported.bright).toBe(true);
     titleHashes.push(exported.hash);
@@ -139,10 +155,10 @@ test("packaged Atlantic interaction, resize and current PNG export", async ({ pa
   await page.waitForFunction(() => getComputedStyle(document.querySelector("#panel")!).opacity === "1");
   await frames(page);
   const resizedChartBox = { x: 330, y: 220, width: 300, height: 350 };
-  const beforeFilter = await pixels(page, await canvasPng(page), resizedChartBox);
+  const beforeFilter = await canvasPixels(page, resizedChartBox);
   await page.locator('#legend [data-cat="5"]').focus();
   await frames(page);
-  const filtered = await pixels(page, await canvasPng(page), resizedChartBox);
+  const filtered = await canvasPixels(page, resizedChartBox);
   expect(filtered.hash).not.toBe(beforeFilter.hash);
   // Clicking export blurs the transient category highlight. The downloaded chart
   // must contain that latest state, not the earlier focused-category rendering.
@@ -156,12 +172,12 @@ test("packaged Atlantic interaction, resize and current PNG export", async ({ pa
   expect(resizedPng.readUInt32BE(16)).toBe(1200 * dpr);
   expect(resizedPng.readUInt32BE(20)).toBe(850 * dpr);
   await frames(page);
-  const currentChart = await pixels(page, await canvasPng(page), resizedChartBox);
+  const currentChart = await canvasPixels(page, resizedChartBox);
   const exportedChart = await pixels(page, resizedPng, resizedChartBox);
   expect(exportedChart.hash).toBe(currentChart.hash);
   expect(exportedChart.hash).not.toBe(filtered.hash);
   const resizedTitle = (await page.locator("#p-name").boundingBox())!;
-  expect((await pixels(page, resizedPng, resizedTitle)).hash).toBe((await pixels(page, await canvasPng(page), resizedTitle)).hash);
+  expect((await pixels(page, resizedPng, resizedTitle)).hash).toBe((await canvasPixels(page, resizedTitle)).hash);
   await expect(page.locator("#panel")).toHaveAttribute("aria-hidden", "false");
   await page.screenshot({ path: info.outputPath("resized.png") });
   await writeFile(info.outputPath("resized-pixels.json"), JSON.stringify({ beforeFilter, filtered, currentChart, exportedChart }));
@@ -235,7 +251,7 @@ test("Atlantic measures shrinking inner content instead of its previous surface 
   expect(png.readUInt32BE(16)).toBe(1440 * (info.project.use.deviceScaleFactor ?? 1));
   await frames(page);
   const region = { x: 28, y: 28, width: 280, height: 180 };
-  expect((await pixels(page, png, region)).hash).toBe((await pixels(page, await canvasPng(page), region)).hash);
+  expect((await pixels(page, png, region)).hash).toBe((await canvasPixels(page, region)).hash);
   expect(errors).toEqual([]);
   // Block wrappers fill the assigned width; they must not feed that width back as natural size.
   await page.locator("#caption").evaluate(element => { element.style.width = "500px"; });
