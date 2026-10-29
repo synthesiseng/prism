@@ -2395,6 +2395,45 @@ describe("CanvasRuntime", () => {
     });
   });
 
+  describe("bounds registration", () => {
+    it.each([
+      ["native", "prototype"],
+      ["native", "non-enumerable own"],
+      ["fallback", "prototype"],
+      ["fallback", "non-enumerable own"]
+    ] as const)("snapshots accessor-backed bounds for %s (%s)", (backend, storage) => {
+      const coordinates = { x: 10, y: 20, width: 300, height: 150 };
+      class AccessorRect {
+        get x() { return coordinates.x; }
+        get y() { return coordinates.y; }
+        get width() { return coordinates.width; }
+        get height() { return coordinates.height; }
+      }
+      const bounds = new AccessorRect();
+      if (storage === "non-enumerable own") {
+        for (const key of ["x", "y", "width", "height"] as const) {
+          Object.defineProperty(bounds, key, Object.getOwnPropertyDescriptor(AccessorRect.prototype, key)!);
+        }
+      }
+      const canvas = new FakeCanvas(backend === "native");
+      canvas.ownerDocument = document;
+      const runtime = new CanvasRuntime(canvas as unknown as HTMLCanvasElement, { backend });
+      try {
+        const surface = runtime.registerSurface(document.createElement("section") as unknown as HTMLElement, { bounds });
+        expect(surface.getBounds()).toEqual({ x: 10, y: 20, width: 300, height: 150 });
+
+        coordinates.x = 40;
+        coordinates.height = 90;
+        expect(surface.getBounds()).toEqual({ x: 10, y: 20, width: 300, height: 150 });
+
+        surface.setBounds(bounds);
+        expect(surface.getBounds()).toEqual({ x: 40, y: 20, width: 300, height: 90 });
+      } finally {
+        runtime.destroy();
+      }
+    });
+  });
+
   describe("coordinates", () => {
     it("centralizes client and backing-store coordinate conversion", () => {
       const canvas = new FakeCanvas(false);
