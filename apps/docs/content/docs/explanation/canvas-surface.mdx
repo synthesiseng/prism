@@ -19,7 +19,7 @@ const surface = runtime.registerSurface(element, {
 - `setBounds(bounds)`
 - `dispose()`
 
-Surface bounds describe the border box in CSS pixels. Prism writes `box-sizing: border-box`, width and height before painting. Padding and borders fit inside those bounds. Use `setBounds()` when layout changes; do not reach into backend or native implementation details.
+**Alpha.10 candidate:** surface bounds describe the border box in CSS pixels. Prism writes `box-sizing: border-box`, width and height before painting. Padding and borders fit inside those bounds. Use `setBounds()` when layout changes; do not reach into backend or native implementation details.
 
 Prism applies native sizing before the browser snapshot. A size change during `onPaint()` defers drawing until a fresh snapshot; `paintOnce()` waits for that pass. Function-based bounds are evaluated when drawn and can also defer a pass. Keep paint handlers repeatable: a retry runs them again, and earlier drawing in an incomplete pass is not rolled back.
 
@@ -34,4 +34,4 @@ Disposing a surface unregisters it from the runtime and restores Prism-owned DOM
 
 Measure an auto-height inner wrapper when content determines the height. The outer surface's `offsetHeight` is the size Prism last assigned, so it cannot tell you that content has shrunk. See [Migrating from alpha.8 to alpha.10](/docs/how-to/migrate-alpha10).
 
-Unchanged literal bounds do not request another paint. A position change after `drawSurface()` requests a following paint; it does not change the draw already performed.
+**Alpha.10 candidate:** unchanged literal bounds do not request another paint, except when an outside-paint call restarts a stopped layout episode. A position change after `drawSurface()` requests a following paint; it does not change the draw already performed.

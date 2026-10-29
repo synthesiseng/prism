@@ -29,7 +29,8 @@ const sections = [
     items: [
       ["Export a PNG", "/docs/how-to/export-png"],
       ["Convert coordinates", "/docs/how-to/coordinate-conversion"],
-      ["Sync transforms", "/docs/how-to/sync-transforms"]
+      ["Sync transforms", "/docs/how-to/sync-transforms"],
+      ["Migrating from alpha.8 to alpha.10", "/docs/how-to/migrate-alpha10"]
     ]
   },
   {

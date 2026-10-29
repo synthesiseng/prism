@@ -199,6 +199,8 @@ Returned by `registerSurface()`. Do not construct directly.
 
 ## Native lifecycle
 
+This section describes the alpha.10 candidate. Install published alpha.9 as shown above; see the [migration note](https://runprism.dev/docs/how-to/migrate-alpha10) for the changes between versions.
+
 The current native path uses canvas `content="drawable"` and surface `drawable`.
 Surface bounds describe the border box in CSS pixels. Prism writes `box-sizing: border-box`, width and height as well as the drawing rectangle. The browser synchronizes native input geometry; application CSS
 transforms are preserved.
@@ -220,8 +222,9 @@ hit-testing failure by rewriting transforms or pointer coordinates.
 
 Prism owns the outer size, so measure an auto-height inner wrapper instead of the
 surface's `offsetHeight`. Add the surface's padding and borders to the measured
-content height. Unchanged bounds do not request a repaint; a position change made
-after drawing requests the next pass. See the [alpha.8 → alpha.10 migration note](https://runprism.dev/docs/how-to/migrate-alpha10).
+content height. Unchanged literal bounds do not request a repaint, except when an
+outside-paint call restarts a stopped layout episode. A position change made after
+drawing requests the next pass. See the [alpha.8 → alpha.10 migration note](https://runprism.dev/docs/how-to/migrate-alpha10).
 
 A canvas has one live runtime, and an element has one active surface within this
 module instance. Duplicate registration throws, including within the same runtime.
@@ -259,9 +262,13 @@ throws. A request for a later pass remains pending.
 The backend never changes silently after construction. Legacy or partial native
 API shapes are rejected in forced native mode; legacy users can pin alpha.8.
 
-[Hosted native qualification](https://github.com/synthesiseng/prism/actions/runs/40217890396)
-passed for Chrome for Testing 158.0.8115.0 on macOS ARM64 with
-`CanvasDrawElement` and Chromium sandboxing enabled. This bounded experimental
+[Hosted native qualification](https://github.com/synthesiseng/prism/actions/runs/40966585136)
+passed on main `06b377d3` for Chrome for Testing 158.0.8115.0 on macOS ARM64
+with `CanvasDrawElement` and Chromium sandboxing enabled. It covers ten
+geometry/pixel/click scenarios, eleven lifecycle/layout tests and seven Atlantic
+cases against the packed candidate, with five intentional cross-project skips.
+[Ordinary CI](https://github.com/synthesiseng/prism/actions/runs/40966585248)
+also passed, including Node 22 package consumers. This bounded experimental
 configuration does not establish Linux native qualification or general browser
 support. The fallback draws placeholders, not HTML. See the [release notes](https://github.com/synthesiseng/prism/blob/main/CHANGELOG.md)
 for qualification limits and release status.
@@ -278,7 +285,7 @@ image content is omitted, so image/export fidelity must be checked per use case.
 - Destroying a runtime disposes its registered surfaces. Disposed surfaces report `isDisposed === true`; `getBounds()` and `setBounds()` throw.
 - Surface bounds and input coordinates use CSS pixels.
 - Direct `ctx` drawing uses canvas backing-store pixels.
-- Undrawn surfaces are inactive for pointer and focus handling until they are drawn again.
+- Omitted surfaces are inactive for pointer and focus handling. Surfaces deferred for native layout retain their prior interaction state until the retry completes or fails.
 
 ## Limitations
 

@@ -42,6 +42,11 @@ const searchItems = [
     "Keep app transforms aligned with surface bounds"
   ],
   [
+    "Migrating from alpha.8 to alpha.10",
+    "/docs/how-to/migrate-alpha10",
+    "Update surface sizing and layout recovery"
+  ],
+  [
     "Prism Atlantic",
     "/docs/examples/prism-atlantic",
     "NOAA/NHC storm-track data visualization"
