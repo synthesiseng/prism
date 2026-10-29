@@ -136,15 +136,16 @@ jobs:
       - name: Pack the candidate for Atlantic
         run: |
           mkdir -p "$EVIDENCE/atlantic-package"
-          npm pack --json --pack-destination "$EVIDENCE/atlantic-package" > "$EVIDENCE/atlantic-package/pack.json"
-          archive=$(node --input-type=module - "$EVIDENCE/atlantic-package/pack.json" <<'NODE'
+          npm pack --json --pack-destination "$EVIDENCE/atlantic-package" > "$EVIDENCE/atlantic-package/pack.log"
+          archive=$(node --input-type=module - "$EVIDENCE/atlantic-package" <<'NODE'
           import assert from 'node:assert/strict';
-          import {readFileSync} from 'node:fs';
+          import {lstatSync, readdirSync} from 'node:fs';
           import path from 'node:path';
-          const packs = JSON.parse(readFileSync(process.argv[2], 'utf8'));
-          assert.equal(packs.length, 1);
-          assert.equal(path.basename(packs[0].filename), packs[0].filename);
-          console.log(packs[0].filename);
+          const directory = process.argv[2];
+          const archives = readdirSync(directory).filter(file => file.endsWith('.tgz'));
+          assert.equal(archives.length, 1, 'exactly one packed archive');
+          assert.ok(lstatSync(path.join(directory, archives[0])).isFile(), 'archive must be a regular file');
+          console.log(archives[0]);
           NODE
           )
           shasum -a 256 "$EVIDENCE/atlantic-package/$archive" > "$EVIDENCE/atlantic-package/sha256.txt"
