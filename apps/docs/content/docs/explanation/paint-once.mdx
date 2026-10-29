@@ -41,7 +41,9 @@ Catching a native `drawSurface()` failure inside `onPaint()` cannot turn that pa
 into success. Its waiters still reject with the original `PrismNativeError`, and
 native diagnostics retain the failure. A later successful pass can restore health.
 
-A native layout retry shares the original deadline. Four consecutive incomplete
+A native layout retry shares the original deadline.
+
+**Alpha.10 candidate:** four consecutive incomplete
 layout passes stop with `LayoutConvergenceError`; this is an
 application layout failure, not a `PrismNativeError`. Pending callers reject and
 self-scheduled retries stop. Native health keeps its last platform outcome.

@@ -17,7 +17,7 @@ runtime.destroy();
 
 `destroy()` stops the runtime, unregisters surfaces, clears handlers and waiters, removes Prism-owned native canvas state, and restores Prism-owned DOM state as closely as possible.
 
-Prism restores an initial style or attribute value only if the current value still matches its last write. Application changes to different values survive cleanup, including width, height and `box-sizing`. This rule also applies to each `pointer-events` and `inert` toggle. An application write equal to Prism's value cannot be distinguished, so cleanup restores the initial value. DOM placement is restored as before.
+Prism restores an initial style or attribute value only if the current value still matches its last write. Application changes to different values survive cleanup, including width and height. The alpha.10 candidate also manages `box-sizing` under this rule. This rule also applies to each `pointer-events` and `inert` toggle. An application write equal to Prism's value cannot be distinguished, so cleanup restores the initial value. DOM placement is restored as before.
 
 `stop()` leaves pending `paintOnce()` requests active; `destroy()` rejects them.
 

@@ -48,7 +48,7 @@ Four consecutive incomplete native layout passes stop with `LayoutConvergenceErr
 
 Fix the layout, then call `setBounds()` or `invalidate()` outside paint to recover. Repeated calls inside paint cannot reset the limit. Further `paintOnce()` calls reject until that recovery trigger. A native deadline expiring during layout retry also stops its retries.
 
-A size change during paint still waits for a fresh browser snapshot. Drawing already performed is not rolled back, so an incomplete frame may be visible. A position change after drawing requests a following paint without layout preparation. Unchanged literal bounds do not schedule extra paints.
+A size change during paint still waits for a fresh browser snapshot. Drawing already performed is not rolled back, so an incomplete frame may be visible. A position change after drawing requests a following paint without layout preparation. Unchanged literal bounds do not schedule extra paints, except when an outside-paint call restarts a stopped layout episode.
 
 ## Check registration and cleanup
 

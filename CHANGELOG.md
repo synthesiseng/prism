@@ -11,13 +11,15 @@
 
 ### Fixed
 
+- Registration copies `x`, `y`, `width` and `height` explicitly, preserving inherited and accessor-backed bounds such as `DOMRect`.
+- Atlantic's live-canvas test sampling keeps PNG capture, decoding and hashing in the browser, avoiding full-image transfers to Node and back. Downloaded PNG assertions, exact pixel comparisons and the 45-second deadline are unchanged.
 - Atlantic measures an inner content wrapper, so panels can shrink after their content changes. Its design, controls and data snapshot are unchanged.
 - Repeating unchanged literal bounds no longer schedules fallback paints. Effective native position changes after drawing request a following paint without another layout snapshot.
 - Package preparation checks the README's pinned install version and rejects release-pending wording. Package-consumer verification checks the actual tarball README too. The intentional `latest` dist-tag policy is unchanged.
 
 ### Qualification
 
-- The macOS native workflow includes content-shrink coverage and Atlantic against a packed candidate, alongside native lifecycle/layout and raw-platform/Prism pixel/click scenarios. It retains the pinned sandboxed Chrome for Testing configuration. Local candidate validation does not establish a hosted run or broader browser support.
+- Main `06b377d3bb41ce67e3b75c64b01c84cdfa2cf3e6` passed [ordinary CI](https://github.com/synthesiseng/prism/actions/runs/40966585248) and [native qualification](https://github.com/synthesiseng/prism/actions/runs/40966585136): 166 unit tests, five fallback tests, Node 22 packed consumers, ten geometry/pixel/click scenarios, eleven native lifecycle/layout tests and seven Atlantic cases, with five intentional cross-project skips. Atlantic runs against the packed candidate, including content shrink at DPR 1 and 2. The pinned sandboxed Chrome for Testing 158.0.8115.0 macOS ARM64 configuration passed; this does not establish Linux or broader browser support. CodeRabbit skipped PR #79 while it was a draft; independent local review passed.
 - See the [alpha.8 → alpha.10 migration note](https://runprism.dev/docs/how-to/migrate-alpha10). No alpha.10 version or release is created by this change.
 
 ## 0.1.0-alpha.9 — 2026-10-26
