@@ -43,6 +43,8 @@ type CanvasDiagnostics = Readonly<{
 
 `PrismNativeError` extends `Error`. Its `code` is `"draw-failed"` or `"paint-timeout"`; draw failures retain the original exception as `cause`. Import it from the package root.
 
+`LayoutConvergenceError` (alpha.10 candidate) extends `Error` separately from `PrismNativeError`. Import it from the package root and use `instanceof` to distinguish an exhausted application-layout episode. It does not appear in native `lastError`.
+
 ## Surface
 
 ```ts

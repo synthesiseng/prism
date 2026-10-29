@@ -2,6 +2,7 @@ import { existsSync, readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { CanvasRuntime } from "./index";
+import * as Prism from "./index";
 
 type PackageJson = Readonly<{
   exports: Record<string, unknown>;
@@ -22,6 +23,10 @@ describe("package shape", () => {
       import: "./packages/html-canvas/dist/index.js"
     });
     expect(CanvasRuntime).toBeTypeOf("function");
+  });
+
+  it("exports a public layout convergence error constructor", () => {
+    expect(Prism).toHaveProperty("LayoutConvergenceError", expect.any(Function));
   });
 
   it("does not leave test artifacts in the runtime dist output", () => {

@@ -28,11 +28,14 @@
 
       <div id="surface-root">
         <div id="brand" aria-label="Prism Atlantic">
+          <div class="surface-content">
           <div class="mark">PRISM <span class="dot">◆</span> ATLANTIC</div>
           <div class="sub">North Atlantic Tropical Cyclones · 2000-2025</div>
+          </div>
         </div>
 
         <section id="metric" class="surface" aria-label="Basin overview">
+          <div class="surface-content">
           <div class="label"><span class="pulse"></span>Basin Overview</div>
           <div class="title">North Atlantic</div>
           <div class="sub">2000-2025</div>
@@ -52,9 +55,11 @@
           <div class="row">
             <span class="k">peak season</span><span class="v">aug - oct</span>
           </div>
+          </div>
         </section>
 
         <section id="legend" class="surface" aria-label="Saffir-Simpson legend">
+          <div class="surface-content">
           <div class="label">Saffir-Simpson</div>
           <ul>
             <li data-cat="0" tabindex="0">
@@ -82,9 +87,11 @@
               ><span class="count" id="c5">--</span>
             </li>
           </ul>
+          </div>
         </section>
 
         <button id="export" title="Export composition as PNG">
+          <span class="surface-content">
           <svg
             viewBox="0 0 16 16"
             fill="none"
@@ -99,14 +106,18 @@
             <path d="M2 12.5v1.5h12v-1.5" />
           </svg>
           <span id="export-label">Export PNG</span>
+          </span>
         </button>
 
         <div id="caption" aria-label="Dataset caption">
+          <div class="surface-content">
           <div class="strong">PRISM/ATLANTIC R1</div>
           <div>@bysynthesis · HTML-IN-CANVAS</div>
+          </div>
         </div>
 
         <div id="tooltip" class="surface" role="status" aria-live="polite">
+          <div class="surface-content">
           <div class="row1">
             <span class="name" id="tt-name">--</span>
             <span class="badge" id="tt-badge">--</span>
@@ -117,9 +128,11 @@
             <span class="k">position</span><span class="v" id="tt-pos">--</span>
             <span class="k">season</span><span class="v" id="tt-season">--</span>
           </div>
+          </div>
         </div>
 
         <aside id="panel" class="surface" aria-hidden="true">
+          <div class="surface-content">
           <button class="x" id="panel-x" aria-label="Close storm detail">×</button>
           <div class="eyebrow" id="p-eyebrow">North Atlantic · Storm</div>
           <h2 class="name" id="p-name">--</h2>
@@ -155,6 +168,7 @@
           <div class="landfalls">
             <div class="k">Landfalls</div>
             <div class="list" id="p-landfalls"></div>
+          </div>
           </div>
         </aside>
       </div>

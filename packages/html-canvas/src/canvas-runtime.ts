@@ -1,3 +1,4 @@
+import { LayoutConvergenceError } from "./layout-convergence-error";
 import { PrismNativeError } from "./native-error";
 import { nativePlatform } from "./runtime/native-platform";
 import { visiblePaintDeadline } from "./runtime/visible-paint-deadline";
@@ -103,6 +104,8 @@ export type CanvasRuntimeOptions = Readonly<{
   nativePaintTimeoutMs?: number;
 }>;
 
+const MAX_INCOMPLETE_LAYOUT_PASSES = 4;
+
 const canvasOwners = new WeakMap<HTMLCanvasElement, CanvasRuntime>();
 
 /** Read-only snapshot of backend capability and last native paint outcome. */
@@ -177,6 +180,10 @@ export class CanvasRuntime {
   private activePaintWaiters: readonly PaintWaiter[] = [];
   private readonly paintRequestFailures = new Set<unknown>();
   private isPreparingLayout = false;
+  private incompleteLayoutPasses = 0;
+  private layoutFailure: Error | undefined;
+  private endingLayoutEpisode = false;
+  private settledNativeHealth: "idle" | "healthy" | "failed" = "idle";
   private metrics: CanvasMetrics = {
     cssWidth: 0,
     cssHeight: 0,
@@ -228,13 +235,13 @@ export class CanvasRuntime {
       if (this.backend.kind === "native") {
         this.releaseNativeCanvas = nativePlatform.activateCanvas(canvas);
         this.removeNativePaintListener = nativePlatform.onPaint(canvas, () => {
-          if (!this.destroyed) this.flushPaint(false);
+          if (!this.destroyed && !this.layoutFailure) this.flushPaint(false);
         });
       }
       this.surfaces = new SurfaceRegistry(
         canvas,
         () => this.invalidate(),
-        () => this.invalidateSurfaceBounds(),
+        (changed) => this.invalidateSurfaceBounds(changed),
         this.backend.kind === "native"
       );
       this.loop = new FrameLoop();
@@ -249,7 +256,7 @@ export class CanvasRuntime {
           }
         },
         render: () => {
-          if (this.destroyed || !this.pendingPaint) {
+          if (this.destroyed || this.layoutFailure || !this.pendingPaint) {
             return;
           }
 
@@ -464,6 +471,8 @@ export class CanvasRuntime {
       return Promise.reject(createDestroyedRuntimeError("paint"));
     }
 
+    if (this.layoutFailure) return Promise.reject(this.layoutFailure);
+
     return new Promise((resolve, reject) => {
       const waiter: PaintWaiter = { resolve, reject };
       this.paintWaiters.push(waiter);
@@ -495,9 +504,11 @@ export class CanvasRuntime {
       return;
     }
 
+    this.resetLayoutEpisode();
+    if (this.layoutFailure) return;
     this.pendingPaint = true;
     if (this.backend.usesNativePaintEvent) {
-      if (!this.isPainting) this.surfaces.prepareLayout();
+      if (!this.isPainting && !this.isPreparingLayout) this.surfaces.prepareLayout();
       this.requestNativePaintForWaiters();
     }
   }
@@ -597,12 +608,20 @@ export class CanvasRuntime {
           (this.cancelNativeDeadline as (() => void) | undefined)?.();
           this.cancelNativeDeadline = passDeadline;
         }
+        this.incompleteLayoutPasses++;
+        if (this.incompleteLayoutPasses >= MAX_INCOMPLETE_LAYOUT_PASSES) {
+          const error = new LayoutConvergenceError();
+          this.nativeHealth = this.settledNativeHealth;
+          this.stopLayoutEpisode(error);
+          return;
+        }
         this.nativeHealth = "pending";
         this.pendingPaint = true;
         this.scheduleLayoutPreparation();
         return;
       }
       if (!this.destroyed) {
+        this.incompleteLayoutPasses = 0;
         for (const waiter of waiters) waiter.resolve();
         this.finishNativePaint("healthy");
         this.lastNativeError = undefined;
@@ -645,11 +664,12 @@ export class CanvasRuntime {
 
   private finishNativePaint(outcome: "healthy" | "failed"): void {
     // A paint handler may have requested a new pass during this flush.
+    this.settledNativeHealth = outcome;
     this.nativeHealth = this.nativePaintRequestedForWaiters ? "pending" : outcome;
   }
 
   private requestNativePaintForWaiters(): void {
-    if (this.destroyed) return;
+    if (this.destroyed || this.layoutFailure) return;
 
     // Invalidation can wait indefinitely for the browser. Only explicit callers
     // own a diagnostic deadline, including callers joining an existing request.
@@ -660,12 +680,14 @@ export class CanvasRuntime {
         this.cancelNativeDeadline = undefined;
         this.nativePaintRequestedForWaiters = false;
         this.nativeHealth = "failed";
+        this.settledNativeHealth = "failed";
         const error = new PrismNativeError(
           "paint-timeout",
           "Native canvas paint exceeded its visible-time diagnostic deadline."
         );
         this.lastNativeError = error;
-        this.rejectPaintWaiters(error);
+        if (this.incompleteLayoutPasses > 0) this.stopLayoutEpisode(error);
+        else this.rejectPaintWaiters(error);
       }
     );
     if (this.nativePaintRequestedForWaiters) return;
@@ -680,12 +702,35 @@ export class CanvasRuntime {
       this.cancelNativeDeadline = undefined;
       this.nativePaintRequestedForWaiters = false;
       this.nativeHealth = "failed";
+      this.settledNativeHealth = "failed";
       this.rejectPaintWaiters(toError(error));
       throw error;
     }
   }
 
-  private invalidateSurfaceBounds(): void {
+  private resetLayoutEpisode(): void {
+    if (this.isPainting || this.isPreparingLayout || this.endingLayoutEpisode) return;
+    this.incompleteLayoutPasses = 0;
+    this.layoutFailure = undefined;
+  }
+
+  private stopLayoutEpisode(error: Error): void {
+    const waiting = this.paintWaiters.length > 0;
+    this.layoutFailure = error;
+    this.pendingPaint = false;
+    this.nativePaintRequestedForWaiters = false;
+    this.cancelNativeDeadline?.();
+    this.cancelNativeDeadline = undefined;
+    this.endingLayoutEpisode = true;
+    try { this.rejectPaintWaiters(error); }
+    finally { this.endingLayoutEpisode = false; }
+    if (!waiting) reportError(error);
+  }
+
+  private invalidateSurfaceBounds(changed: boolean): void {
+    const recovering = this.layoutFailure !== undefined && !this.isPainting &&
+      !this.isPreparingLayout && !this.endingLayoutEpisode;
+    if (!changed && !recovering) return;
     if (this.isPainting && this.backend.usesNativePaintEvent) {
       // Only a completed handler pass may schedule a native layout retry.
       return;
@@ -699,7 +744,7 @@ export class CanvasRuntime {
     this.layoutPreparationScheduled = true;
     queueMicrotask(() => {
       this.layoutPreparationScheduled = false;
-      if (this.destroyed) return;
+      if (this.destroyed || this.layoutFailure) return;
       this.paintRequestFailures.clear();
       this.isPreparingLayout = true;
       let preparationFailure: { error: unknown } | undefined;
@@ -722,9 +767,11 @@ export class CanvasRuntime {
         this.nativePaintRequestedForWaiters = false;
         if (!requestFailure.done) {
           this.nativeHealth = "failed";
+          this.settledNativeHealth = "failed";
           if (error instanceof PrismNativeError) this.lastNativeError = error;
         } else {
           this.nativeHealth = "healthy";
+          this.settledNativeHealth = "healthy";
         }
         // Finalize the failed attempt before cleanup callbacks can request a new pass.
         this.rejectPaintWaiters(error);

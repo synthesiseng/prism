@@ -41,3 +41,10 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm e2e && pnpm --filter @prism/doc
 - Keep docs factual and concise.
 - Do not add demos, wrappers, or docs infrastructure unless they directly serve
   the current runtime direction.
+
+## Release checklist
+
+- Update package versions and the README install command together, then run `pnpm test:package` against the actual archive.
+- Check `apps/docs/content/docs/how-to/migrate-alpha10.mdx`, the API and types reference, and the changelog for candidate labels and version references. Keep candidate wording before publication; remove it only when that version is released.
+- Verify registry availability before updating website installation commands. Do not imply an unreleased package is installable or change npm dist-tags without approval.
+- Require passing ordinary and native qualification on the release source, including the packed Atlantic consumer and Node 22 checks.

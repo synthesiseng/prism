@@ -40,3 +40,15 @@ starts the budget then. Further invalidation or coalesced callers do not reset i
 Catching a native `drawSurface()` failure inside `onPaint()` cannot turn that pass
 into success. Its waiters still reject with the original `PrismNativeError`, and
 native diagnostics retain the failure. A later successful pass can restore health.
+
+A native layout retry shares the original deadline. Four consecutive incomplete
+layout passes stop with `LayoutConvergenceError`; this is an
+application layout failure, not a `PrismNativeError`. Pending callers reject and
+self-scheduled retries stop. Native health keeps its last platform outcome.
+Without waiting callers, the error reaches `reportError()` once.
+
+Fix the layout, then call `setBounds()` or `invalidate()` outside paint to start a
+new attempt. Calls during paint or layout preparation do not reset the limit.
+Until recovery, `paintOnce()` rejects with the stored error. A native timeout
+during layout retry also stops further retries; it remains a native diagnostic
+failure. Drawing already performed in an incomplete pass is not rolled back.

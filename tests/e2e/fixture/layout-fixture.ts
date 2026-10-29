@@ -17,7 +17,10 @@ function create(options: { dynamic: boolean; scale: number; transform: boolean }
   const text = document.createElement("p");
   text.style.cssText = "margin:40px 0 0;padding:0";
   text.textContent = "alpha beta gamma delta epsilon zeta eta theta iota kappa lambda mu ".repeat(3);
-  element.append(button, text);
+  const content = document.createElement("div");
+  content.style.display = "flow-root";
+  content.append(button, text);
+  element.append(content);
   root.append(canvas, element);
   document.body.append(root);
   const naturalWidth = element.offsetWidth;
@@ -64,7 +67,7 @@ function create(options: { dynamic: boolean; scale: number; transform: boolean }
       insideWidth = element.offsetWidth;
     }
     if (atlantic) {
-      bounds = { ...bounds, width: 280, height: Math.max(element.offsetHeight, 180) };
+      bounds = { ...bounds, width: 280, height: Math.max(content.offsetHeight, 180) };
       if (!options.dynamic) surface.setBounds(bounds);
     }
     drawSurface(surface);
@@ -97,7 +100,7 @@ function create(options: { dynamic: boolean; scale: number; transform: boolean }
       return { ...measure(), firstDraw: draws[before], firstPaint: paintStates[beforeState], beforePass };
     },
     async resize(width: number, duringPaint: boolean) {
-      const next = { ...bounds, width, height: Math.max(element.offsetHeight, 180) };
+      const next = { ...bounds, width, height: Math.max(content.offsetHeight, 180) };
       if (duringPaint) inside = next;
       else { bounds = next; if (!options.dynamic) surface.setBounds(bounds); }
       return this.paint();
@@ -107,6 +110,25 @@ function create(options: { dynamic: boolean; scale: number; transform: boolean }
       const samples = [];
       for (let i = 0; i < 4; i++) samples.push(await this.paint());
       return samples;
+    },
+    async shrink() {
+      atlantic = true;
+      text.style.margin = "0"; text.style.whiteSpace = "pre";
+      text.textContent = Array.from({ length: 35 }, () => "line").join("\n");
+      runtime.invalidate();
+      const grown = await this.paint();
+      const longContent = content.offsetHeight;
+      text.textContent = "line";
+      runtime.invalidate();
+      const shrunk = await this.paint();
+      return { grown, shrunk, longContent, shortContent: content.offsetHeight };
+    },
+    async borderBox() {
+      element.style.padding = "10px"; element.style.border = "2px solid red";
+      bounds = { ...bounds, width: 120, height: 80 };
+      surface.setBounds(bounds); runtime.invalidate();
+      const result = await this.paint();
+      return { ...result, boxSizing: getComputedStyle(element).boxSizing };
     },
     async idle() {
       // Pixel/layout readback inside paint can itself dirty a subsequent browser frame.
@@ -139,6 +161,8 @@ const fixture = {
   resize(width: number, duringPaint: boolean) { return active!.resize(width, duringPaint); },
   measure() { return active!.measure(); },
   converge() { return active!.converge(); },
+  shrink() { return active!.shrink(); },
+  borderBox() { return active!.borderBox(); },
   idle() { return active!.idle(); },
   dispose(appChanges: boolean) { const result = active!.dispose(appChanges); active = undefined; return result; }
 };

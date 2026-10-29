@@ -30,7 +30,7 @@ export class SurfaceRegistry {
   constructor(
     private readonly canvas: HTMLCanvasElement,
     private readonly onChange: () => void,
-    private readonly onBoundsChange: () => void = onChange,
+    private readonly onBoundsChange: (changed: boolean) => void = onChange,
     private readonly native = false
   ) {}
 
@@ -50,9 +50,9 @@ export class SurfaceRegistry {
       const surface = new CanvasSurface(element, options);
       this.assertOpen();
       setSurfaceLifecycle(surface, {
-        invalidate: (bounds) => {
-          this.queueLayout(surface, bounds);
-          this.onBoundsChange();
+        invalidate: (bounds, changed) => {
+          if (changed) this.queueLayout(surface, bounds);
+          this.onBoundsChange(changed);
         },
         unregister: (target) => this.unregister(target)
       });
@@ -103,7 +103,8 @@ export class SurfaceRegistry {
     if (!record) return;
     if (record.prepared?.width === bounds.width && record.prepared.height === bounds.height &&
         record.domState.writes.matchesStyle("width") &&
-        record.domState.writes.matchesStyle("height")) {
+        record.domState.writes.matchesStyle("height") &&
+        record.domState.writes.matchesStyle("box-sizing")) {
       record.pending = undefined;
       return;
     }
@@ -120,6 +121,8 @@ export class SurfaceRegistry {
         if (!size) continue;
         const current = () => !record.surface.isDisposed &&
           this.records.includes(record) && record.pending === size;
+        if (!current()) continue;
+        writeSurfaceStyle(record.surface.element, "box-sizing", "border-box");
         if (!current()) continue;
         writeSurfaceStyle(record.surface.element, "width", `${String(size.width)}px`);
         if (!current()) continue;

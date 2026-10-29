@@ -4,6 +4,7 @@ type StyleName =
   | "top"
   | "width"
   | "height"
+  | "box-sizing"
   | "transform"
   | "transform-origin"
   | "pointer-events";
@@ -15,6 +16,7 @@ const styleNames: readonly StyleName[] = [
   "top",
   "width",
   "height",
+  "box-sizing",
   "transform",
   "transform-origin",
   "pointer-events"

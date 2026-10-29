@@ -1,4 +1,4 @@
 {
   "title": "Guides",
-  "pages": ["export-png", "coordinate-conversion", "sync-transforms"]
+  "pages": ["export-png", "coordinate-conversion", "sync-transforms", "migrate-alpha10"]
 }
