@@ -68,7 +68,13 @@ export class CanvasSurface {
    */
   constructor(element: HTMLElement, options: SurfaceOptions) {
     this.element = element;
-    this.boundsInput = typeof options.bounds === "function" ? options.bounds : { ...options.bounds };
+    const bounds = options.bounds;
+    this.boundsInput = typeof bounds === "function" ? bounds : {
+      x: bounds.x,
+      y: bounds.y,
+      width: bounds.width,
+      height: bounds.height
+    };
 
     if (options.ariaLabel) {
       writeSurfaceAttribute(this.element, "aria-label", options.ariaLabel);
