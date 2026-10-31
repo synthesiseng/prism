@@ -45,6 +45,6 @@ pnpm lint && pnpm typecheck && pnpm test && pnpm e2e && pnpm --filter @prism/doc
 ## Release checklist
 
 - Update package versions and the README install command together, then run `pnpm test:package` against the actual archive.
-- Check `apps/docs/content/docs/how-to/migrate-alpha10.mdx`, the API and types reference, and the changelog for candidate labels and version references. Keep candidate wording before publication; remove it only when that version is released.
-- Verify registry availability before updating website installation commands. Do not imply an unreleased package is installable or change npm dist-tags without approval.
+- Check the README, changelog, migration guide, API and types reference, and the installation, introduction and explanation pages for candidate labels and version references. The packed README must describe its exact version without release-pending wording. Keep website candidate wording before publication; remove it only when that version is released.
+- Verify registry availability before updating website installation commands, the home page and top-navigation version label. Do not imply an unreleased package is installable or change npm dist-tags without approval.
 - Require passing ordinary and native qualification on the release source, including the packed Atlantic consumer and Node 22 checks.

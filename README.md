@@ -47,10 +47,10 @@ Your app owns the scene, drawing model, animation loop, and state. Prism owns th
 
 ## Installation
 
-Install the published alpha.9 package:
+Install this package version:
 
 ```sh
-pnpm add @synthesisengineering/prism@0.1.0-alpha.9
+pnpm add @synthesisengineering/prism@0.1.0-alpha.10
 ```
 
 ## Agent Skill
@@ -199,7 +199,7 @@ Returned by `registerSurface()`. Do not construct directly.
 
 ## Native lifecycle
 
-This section describes the alpha.10 candidate. Install published alpha.9 as shown above; see the [migration note](https://runprism.dev/docs/how-to/migrate-alpha10) for the changes between versions.
+This section describes alpha.10. See the [migration note](https://runprism.dev/docs/how-to/migrate-alpha10) for the changes from alpha.8 and alpha.9.
 
 The current native path uses canvas `content="drawable"` and surface `drawable`.
 Surface bounds describe the border box in CSS pixels. Prism writes `box-sizing: border-box`, width and height as well as the drawing rectangle. The browser synchronizes native input geometry; application CSS
